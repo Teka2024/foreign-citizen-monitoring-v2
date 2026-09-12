@@ -1,0 +1,11 @@
+node_modules/
+backend/node_modules/
+frontend-vite/node_modules/
+backend/uploads/*
+!backend/uploads/.gitkeep
+.env
+*.log
+.DS_Store
+backend/reset-password.js
+backend/reset-user-password.js
+backend/seed-users.js
