@@ -132,7 +132,7 @@ const citizenSchema = new mongoose.Schema({
   },
   expectedExitDate: {
     type: Date,
-    required: [true, 'Expected exit date is required']
+    required: false
   },
   actualExitDate: {
     type: Date
@@ -425,13 +425,29 @@ citizenSchema.virtual('displayName').get(function() {
 
 citizenSchema.virtual('daysRemaining').get(function() {
   const now = new Date();
-  const diffTime = this.expectedExitDate - now;
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // ✅ Use the document expiry date instead of expectedExitDate
+  let expiry = null;
+  switch (this.entryDocType) {
+    case 'visa':  expiry = this.visaExpiryDate;  break;
+    case 'id':    expiry = this.idExpiryDate;    break;
+    case 'stamp': expiry = this.stampExpiryDate; break;
+    case 'other': expiry = this.otherExpiryDate; break;
+  }
+  if (!expiry) return null;
+  return Math.ceil((new Date(expiry) - now) / (1000 * 60 * 60 * 24));
 });
 
 citizenSchema.virtual('isOverstayed').get(function() {
   const now = new Date();
-  return now > this.expectedExitDate && this.status === 'active';
+  let expiry = null;
+  switch (this.entryDocType) {
+    case 'visa':  expiry = this.visaExpiryDate;  break;
+    case 'id':    expiry = this.idExpiryDate;    break;
+    case 'stamp': expiry = this.stampExpiryDate; break;
+    case 'other': expiry = this.otherExpiryDate; break;
+  }
+  if (!expiry) return false;
+  return now > new Date(expiry) && this.status === 'active';
 });
 
 // ==================== INDEXES ====================

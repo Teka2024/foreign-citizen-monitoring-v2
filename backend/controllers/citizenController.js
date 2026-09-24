@@ -9,8 +9,30 @@ const mongoose = require('mongoose');
  */
 exports.createCitizen = async (req, res) => {
   try {
+    // ✅ BACKEND VALIDATION: Mandatory file uploads
+    if (!req.files || !req.files.photo || req.files.photo.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passport photo is required. Please upload a photo.'
+      });
+    }
+
+    if (!req.files.passportFile || req.files.passportFile.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passport document file is required. Please upload the passport.'
+      });
+    }
+
+    if (!req.files.entryDocumentFile || req.files.entryDocumentFile.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Entry document file is required. Please upload the entry document.'
+      });
+    }
+
     const citizenData = req.body;
-    
+
     // Check for duplicate passport or visa
     const existing = await ForeignCitizen.findOne({
       $or: [
@@ -25,6 +47,12 @@ exports.createCitizen = async (req, res) => {
         message: 'Citizen with this passport or visa already exists'
       });
     }
+
+    // ✅ Attach file paths to citizenData before saving
+    // Adjust these field names if your multer middleware saves to different paths
+    citizenData.photo = req.files.photo[0].path;
+    citizenData.passportFile = req.files.passportFile[0].path;
+    citizenData.entryDocumentFile = req.files.entryDocumentFile[0].path;
 
     const citizen = new ForeignCitizen(citizenData);
     await citizen.save();
@@ -64,18 +92,18 @@ exports.createCitizen = async (req, res) => {
  */
 exports.getAllCitizens = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      status, 
-      nationality, 
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      nationality,
       visaType,
       riskLevel,
       search,
       dateFrom,
       dateTo
     } = req.query;
-    
+
     const filter = {};
     if (status) filter.status = status;
     if (nationality) filter.nationality = nationality;
@@ -189,7 +217,7 @@ exports.updateCitizen = async (req, res) => {
     }
 
     const before = citizen.toObject();
-    
+
     // Update citizen
     Object.assign(citizen, updates);
     citizen.updatedAt = Date.now();
@@ -345,7 +373,7 @@ exports.addMonitoringNote = async (req, res) => {
 exports.searchCitizens = async (req, res) => {
   try {
     const { query } = req.query;
-    
+
     if (!query || query.trim().length < 2) {
       return res.json({
         success: true,
@@ -385,8 +413,8 @@ exports.getDashboardStats = async (req, res) => {
     const total = await ForeignCitizen.countDocuments();
     const active = await ForeignCitizen.countDocuments({ status: 'active' });
     const overstayed = await ForeignCitizen.countDocuments({ status: 'overstayed' });
-    const highRisk = await ForeignCitizen.countDocuments({ 
-      riskLevel: { $in: ['high', 'critical'] } 
+    const highRisk = await ForeignCitizen.countDocuments({
+      riskLevel: { $in: ['high', 'critical'] }
     });
 
     // Get checked-in count
@@ -404,8 +432,8 @@ exports.getDashboardStats = async (req, res) => {
       .limit(5);
 
     // Get alerts count
-    const pendingAlerts = await Alert.countDocuments({ 
-      status: { $in: ['new', 'acknowledged', 'investigating'] } 
+    const pendingAlerts = await Alert.countDocuments({
+      status: { $in: ['new', 'acknowledged', 'investigating'] }
     });
 
     res.json({
@@ -468,27 +496,30 @@ exports.getCitizenAccommodationHistory = async (req, res) => {
  */
 async function checkRiskFactors(citizen) {
   const riskFactors = [];
-  
-  // Check overstay risk
   const today = new Date();
-  const daysUntilExit = Math.ceil((citizen.expectedExitDate - today) / (1000 * 60 * 60 * 24));
-  
-  if (daysUntilExit < 0) {
-    riskFactors.push({
-      factor: 'overstay',
-      description: 'Citizen has overstayed their visa'
-    });
-    citizen.status = 'overstayed';
-  } else if (daysUntilExit < 30) {
-    riskFactors.push({
-      factor: 'visa_expiring_soon',
-      description: `Visa expires in ${daysUntilExit} days`
-    });
+
+  const { expiryDate, docType } = getDocumentExpiry(citizen);
+
+  if (expiryDate) {
+    const expiry = new Date(expiryDate);
+    const daysRemaining = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+
+    if (daysRemaining < 0) {
+      riskFactors.push({
+        factor: 'overstay',
+        description: `${docType} expired ${Math.abs(daysRemaining)} day(s) ago`
+      });
+      citizen.status = 'overstayed';
+    } else if (daysRemaining <= 7) {
+      riskFactors.push({
+        factor: 'visa_expiring_soon',
+        description: `${docType} expires in ${daysRemaining} day(s)`
+      });
+    }
   }
 
-  // Check if high-risk nationality (example list)
   const highRiskCountries = ['country1', 'country2', 'country3'];
-  if (highRiskCountries.includes(citizen.nationality.toLowerCase())) {
+  if (citizen.nationality && highRiskCountries.includes(citizen.nationality.toLowerCase())) {
     riskFactors.push({
       factor: 'high_risk_nationality',
       description: 'Citizen from high-risk country'
@@ -497,20 +528,27 @@ async function checkRiskFactors(citizen) {
 
   if (riskFactors.length > 0) {
     citizen.riskFactors = riskFactors;
-    
-    // Determine risk level
+
     const hasCriticalRisk = riskFactors.some(r => r.factor === 'overstay');
     if (hasCriticalRisk) {
       citizen.riskLevel = 'critical';
-      // Create alert
-      await Alert.create({
+
+      const existingAlert = await Alert.findOne({
         citizenId: citizen._id,
         type: 'overstay',
-        severity: 'critical',
-        message: `Citizen ${citizen.fullName} has overstayed their visa`,
-        status: 'new',
-        createdBy: citizen.monitoringOfficer || citizen._id
+        status: { $in: ['new', 'acknowledged', 'investigating'] }
       });
+
+      if (!existingAlert) {
+        await Alert.create({
+          citizenId: citizen._id,
+          type: 'overstay',
+          severity: 'critical',
+          message: `Citizen ${citizen.fullName} has overstayed their ${docType || 'document'}`,
+          status: 'new',
+          createdBy: citizen.monitoringOfficer || citizen._id
+        });
+      }
     } else if (riskFactors.length >= 2) {
       citizen.riskLevel = 'high';
     } else {
@@ -519,4 +557,31 @@ async function checkRiskFactors(citizen) {
   }
 
   await citizen.save();
+}
+
+/**
+ * Shared helper: same as in routes/dashboard.js
+ */
+function getDocumentExpiry(citizen) {
+  const map = {
+    visa:  { date: citizen.visaExpiryDate,  label: 'Visa' },
+    id:    { date: citizen.idExpiryDate,    label: 'ID' },
+    stamp: { date: citizen.stampExpiryDate, label: 'Stamp' },
+    other: { date: citizen.otherExpiryDate, label: 'Other Document' },
+  };
+
+  if (citizen.entryDocType && map[citizen.entryDocType]?.date) {
+    return {
+      expiryDate: map[citizen.entryDocType].date,
+      docType:    map[citizen.entryDocType].label,
+    };
+  }
+
+  for (const key of ['visa', 'id', 'stamp', 'other']) {
+    if (map[key].date) {
+      return { expiryDate: map[key].date, docType: map[key].label };
+    }
+  }
+
+  return { expiryDate: null, docType: '' };
 }
