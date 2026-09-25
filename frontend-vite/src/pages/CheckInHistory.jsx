@@ -9,6 +9,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Chip,
   TextField,
   InputAdornment,
@@ -19,7 +20,7 @@ import {
   Tooltip,
   Avatar,
 } from '@mui/material';
-import { Search, Refresh, Visibility } from '@mui/icons-material';
+import { Search, Refresh, Visibility, History } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
@@ -32,7 +33,11 @@ const CheckInHistory = () => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredData, setFilteredData] = useState([]);
-  const [citizenMap, setCitizenMap] = useState({}); // Map passport -> citizen name
+  const [citizenMap, setCitizenMap] = useState({});
+
+  // ✅ Pagination state
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const isOfficer = user?.role === 'admin' || user?.role === 'officer';
 
@@ -45,31 +50,26 @@ const CheckInHistory = () => {
     }
   }, []);
 
-  // Step 1: Fetch all citizens first to get names
   const fetchAllCitizens = async () => {
     try {
       console.log('📊 Fetching all citizens...');
       const response = await api.get('/citizens', { params: { limit: 1000 } });
       const citizens = response.data.data || response.data.citizens || [];
       console.log(`✅ Found ${citizens.length} citizens`);
-      
-      // Create a map: passportNumber -> citizen name
+
       const map = {};
       citizens.forEach(citizen => {
         if (citizen.passportNumber) {
-          // Use fullName if available, otherwise name
           const name = citizen.fullName || citizen.name || citizen.passportNumber;
           map[citizen.passportNumber] = name;
         }
       });
       setCitizenMap(map);
       console.log('📊 Citizen map created:', Object.keys(map).length, 'entries');
-      
-      // Now fetch history
+
       fetchHistory(map);
     } catch (err) {
       console.error('❌ Error fetching citizens:', err);
-      // Still try to fetch history without names
       fetchHistory({});
     }
   };
@@ -80,7 +80,7 @@ const CheckInHistory = () => {
     try {
       console.log('📊 Fetching check-in history...');
       const response = await api.get('/accommodations/history/all');
-      
+
       let data = [];
       if (response.data && response.data.data) {
         data = response.data.data;
@@ -96,25 +96,24 @@ const CheckInHistory = () => {
           }
         }
       }
-      
+
       console.log('📊 Extracted data:', data);
       console.log('📊 Number of records:', data.length);
-      
-      // Enrich history data with names from the map
+
       const enrichedData = data.map(record => {
         const passport = record.citizen?.passportNumber;
         if (passport && map[passport]) {
-          // Add the name to the citizen object
           if (record.citizen) {
             record.citizen.fullName = map[passport];
           }
         }
         return record;
       });
-      
+
       setHistory(enrichedData);
       setFilteredData(enrichedData);
-      
+      setPage(0); // ✅ Reset to first page when data loads
+
       if (data.length === 0) {
         toast.info('No check-in history found');
       } else {
@@ -132,6 +131,7 @@ const CheckInHistory = () => {
   const handleSearch = () => {
     if (!searchQuery.trim()) {
       setFilteredData(history);
+      setPage(0);
       return;
     }
 
@@ -144,47 +144,57 @@ const CheckInHistory = () => {
     });
 
     setFilteredData(filtered);
-    
+    setPage(0); // ✅ Reset to first page when filter changes
+
     if (filtered.length === 0) {
       toast.info('No matching records found');
     }
   };
 
-  // ✅ Get citizen name - now uses the enriched data
+  // ✅ Pagination handlers
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // ✅ Slice data for the current page
+  const paginatedData = filteredData.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
   const getCitizenName = (record) => {
     if (!record) return 'N/A';
     const citizen = record.citizen;
     if (!citizen) return 'N/A';
-    
-    // Try fullName (now enriched from the map)
+
     if (citizen.fullName) return citizen.fullName;
-    // Try name
     if (citizen.name) return citizen.name;
-    // Fallback to passport number
     if (citizen.passportNumber) return citizen.passportNumber;
-    
+
     return 'N/A';
   };
 
-  // ✅ Get passport number
   const getPassportNumber = (record) => {
     return record.citizen?.passportNumber || 'N/A';
   };
 
-  // ✅ Get nationality
   const getNationality = (record) => {
     return record.citizen?.nationality || 'N/A';
   };
 
-  // ✅ Get initials from citizen name
   const getInitials = (record) => {
     if (!record) return 'U';
     const citizen = record.citizen;
     if (!citizen) return 'U';
-    
+
     const name = citizen.fullName || citizen.name || citizen.passportNumber || '';
     if (!name) return 'U';
-    
+
     const parts = name.trim().split(' ');
     if (parts.length >= 2) {
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
@@ -198,6 +208,7 @@ const CheckInHistory = () => {
       case 'checked_out': return 'default';
       case 'overstayed': return 'error';
       case 'cancelled': return 'warning';
+      case 'transferred': return 'info';
       default: return 'default';
     }
   };
@@ -208,6 +219,7 @@ const CheckInHistory = () => {
       case 'checked_out': return 'Checked Out';
       case 'overstayed': return 'Overstayed';
       case 'cancelled': return 'Cancelled';
+      case 'transferred': return 'Transferred';
       default: return status || 'N/A';
     }
   };
@@ -233,21 +245,76 @@ const CheckInHistory = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h5" gutterBottom>
-              Check-In / Check-Out History
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              View all accommodation check-in and check-out records
-            </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+              flexShrink: 0,
+            }}>
+              <History sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Check-In / Check-Out History
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                View all accommodation check-in and check-out records
+              </Typography>
+            </Box>
           </Box>
           <Button
             variant="contained"
             startIcon={<Refresh />}
-            sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
             onClick={fetchAllCitizens}
+            sx={{
+              borderRadius: 3,
+              textTransform: 'none',
+              fontWeight: 700,
+              px: 3, py: 1,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              color: 'white',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+            }}
           >
             Refresh
           </Button>
@@ -279,11 +346,12 @@ const CheckInHistory = () => {
           <Button variant="contained" onClick={handleSearch}>
             Search
           </Button>
-          <Button 
-            variant="outlined" 
-            onClick={() => { 
-              setSearchQuery(''); 
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setSearchQuery('');
               setFilteredData(history);
+              setPage(0);
             }}
           >
             Clear
@@ -309,7 +377,7 @@ const CheckInHistory = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredData.length === 0 ? (
+            {paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
                   <Typography variant="body1" color="textSecondary">
@@ -318,7 +386,7 @@ const CheckInHistory = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredData.map((record, index) => {
+              paginatedData.map((record, index) => {
                 const citizenName = getCitizenName(record);
                 const passport = getPassportNumber(record);
                 const nationality = getNationality(record);
@@ -327,9 +395,12 @@ const CheckInHistory = () => {
                 const checkOutDate = record.actualCheckOutDate ? new Date(record.actualCheckOutDate) : null;
                 const daysStayed = getDaysStayed(record.checkInDate, record.actualCheckOutDate);
 
+                // ✅ Global row number (continues across pages)
+                const globalIndex = page * rowsPerPage + index + 1;
+
                 return (
                   <TableRow key={record._id} hover>
-                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>{globalIndex}</TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: '0.7rem' }}>
@@ -356,8 +427,8 @@ const CheckInHistory = () => {
                       {checkInDate ? format(checkInDate, 'MMM dd, yyyy') : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      {checkOutDate ? 
-                        format(checkOutDate, 'MMM dd, yyyy') : 
+                      {checkOutDate ?
+                        format(checkOutDate, 'MMM dd, yyyy') :
                         <Chip label="Not Checked Out" size="small" color="warning" />
                       }
                     </TableCell>
@@ -398,6 +469,17 @@ const CheckInHistory = () => {
             )}
           </TableBody>
         </Table>
+
+        {/* ✅ Pagination */}
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 15, 20, 25]}
+          component="div"
+          count={filteredData.length}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+        />
       </TableContainer>
     </Box>
   );

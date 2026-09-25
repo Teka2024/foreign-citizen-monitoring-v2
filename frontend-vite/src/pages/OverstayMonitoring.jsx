@@ -82,13 +82,12 @@ const OverstayMonitoring = () => {
     try {
       const response = await api.get('/dashboard/overstay-monitoring');
       const responseData = response.data.data;
-      
-      // Enrich data with accommodation and nationality
+
       const enrichedOverstayed = await Promise.all((responseData.overstayed || []).map(async (item) => {
         const enriched = await enrichCitizenData(item);
         return enriched;
       }));
-      
+
       const enrichedExpiring = await Promise.all((responseData.expiringSoon || []).map(async (item) => {
         const enriched = await enrichCitizenData(item);
         return enriched;
@@ -109,10 +108,8 @@ const OverstayMonitoring = () => {
     }
   };
 
-  // ✅ FIXED: Helper function to enrich citizen data
   const enrichCitizenData = async (item) => {
     try {
-      // Check cache first
       if (citizenCache[item.citizenId]) {
         const cached = citizenCache[item.citizenId];
         return {
@@ -123,10 +120,8 @@ const OverstayMonitoring = () => {
         };
       }
 
-      // ✅ Fetch citizen details - same way the details page does
       const citizenResponse = await api.get(`/citizens/${item.citizenId}`);
-      
-      // ✅ Handle different response structures
+
       let citizen = null;
       if (citizenResponse.data && citizenResponse.data.citizen) {
         citizen = citizenResponse.data.citizen;
@@ -135,8 +130,7 @@ const OverstayMonitoring = () => {
       } else {
         citizen = citizenResponse.data;
       }
-      
-      // ✅ Extract nationality - try multiple possible fields
+
       let nationality = 'N/A';
       if (citizen) {
         if (citizen.nationality) {
@@ -145,8 +139,7 @@ const OverstayMonitoring = () => {
           nationality = citizen.nationality || citizen.country || 'N/A';
         }
       }
-      
-      // ✅ Get full name
+
       let fullName = item.fullName || 'N/A';
       if (citizen) {
         if (citizen.fullName) {
@@ -157,14 +150,12 @@ const OverstayMonitoring = () => {
           fullName = `${citizen.firstName} ${citizen.lastName}`;
         }
       }
-      
-      // ✅ Get accommodation
+
       let accommodationName = 'N/A';
       if (citizen && citizen.currentAccommodation) {
         if (citizen.currentAccommodation.accommodationId?.name) {
           accommodationName = citizen.currentAccommodation.accommodationId.name;
         } else if (typeof citizen.currentAccommodation.accommodationId === 'string') {
-          // Try to fetch accommodation by ID
           try {
             const accResponse = await api.get(`/accommodations/${citizen.currentAccommodation.accommodationId}`);
             if (accResponse.data && accResponse.data.data) {
@@ -173,12 +164,11 @@ const OverstayMonitoring = () => {
               accommodationName = accResponse.data.accommodation.name || 'N/A';
             }
           } catch (err) {
-            // If accommodation fetch fails, try history
+            // ignore
           }
         }
       }
-      
-      // If still no accommodation, try from history
+
       if (accommodationName === 'N/A') {
         try {
           const historyResponse = await api.get(`/accommodations/history/${item.citizenId}`);
@@ -192,7 +182,7 @@ const OverstayMonitoring = () => {
             }
           }
         } catch (err) {
-          // Ignore history fetch errors
+          // ignore
         }
       }
 
@@ -203,7 +193,6 @@ const OverstayMonitoring = () => {
         currentAccommodation: accommodationName,
       };
 
-      // Cache the result
       setCitizenCache(prev => ({
         ...prev,
         [item.citizenId]: {
@@ -216,7 +205,6 @@ const OverstayMonitoring = () => {
       return enrichedItem;
     } catch (err) {
       console.error('❌ Error enriching citizen data:', err);
-      // If citizen fetch fails, return item with what we have
       return {
         ...item,
         nationality: item.nationality || 'N/A',
@@ -229,16 +217,15 @@ const OverstayMonitoring = () => {
     let overstayed = [...(data.overstayed || [])];
     let expiring = [...(data.expiringSoon || [])];
 
-    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      overstayed = overstayed.filter(item => 
+      overstayed = overstayed.filter(item =>
         item.fullName?.toLowerCase().includes(query) ||
         item.passportNumber?.toLowerCase().includes(query) ||
         item.nationality?.toLowerCase().includes(query) ||
         item.currentAccommodation?.toLowerCase().includes(query)
       );
-      expiring = expiring.filter(item => 
+      expiring = expiring.filter(item =>
         item.fullName?.toLowerCase().includes(query) ||
         item.passportNumber?.toLowerCase().includes(query) ||
         item.nationality?.toLowerCase().includes(query) ||
@@ -246,29 +233,26 @@ const OverstayMonitoring = () => {
       );
     }
 
-    // Status filter
     if (statusFilter === 'overstayed') {
       expiring = [];
     } else if (statusFilter === 'expiring') {
       overstayed = [];
     }
 
-    // Document type filter
     if (docTypeFilter !== 'all') {
-      overstayed = overstayed.filter(item => 
+      overstayed = overstayed.filter(item =>
         item.docType?.toLowerCase() === docTypeFilter.toLowerCase()
       );
-      expiring = expiring.filter(item => 
+      expiring = expiring.filter(item =>
         item.docType?.toLowerCase() === docTypeFilter.toLowerCase()
       );
     }
 
-    // Accommodation filter
     if (accommodationFilter !== 'all') {
-      overstayed = overstayed.filter(item => 
+      overstayed = overstayed.filter(item =>
         item.currentAccommodation?.toLowerCase().includes(accommodationFilter.toLowerCase())
       );
-      expiring = expiring.filter(item => 
+      expiring = expiring.filter(item =>
         item.currentAccommodation?.toLowerCase().includes(accommodationFilter.toLowerCase())
       );
     }
@@ -298,7 +282,6 @@ const OverstayMonitoring = () => {
     }
   };
 
-  // Get unique accommodations from data
   const getUniqueAccommodations = () => {
     const allItems = [...(data.overstayed || []), ...(data.expiringSoon || [])];
     const accs = allItems
@@ -320,34 +303,75 @@ const OverstayMonitoring = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Paper sx={{ 
-        p: 3, 
-        mb: 3, 
-        background: 'linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%)',
-        color: '#1a237e',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-          <Box>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
-              <Warning sx={{ mr: 1, verticalAlign: 'middle', color: '#1a237e' }} />
-              Overstay Monitoring
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Monitor citizens with expiring or expired documents
-            </Typography>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+              flexShrink: 0,
+            }}>
+              <Warning sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Overstay Monitoring
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Monitor citizens with expiring or expired documents
+              </Typography>
+            </Box>
           </Box>
           <Button
             variant="contained"
             startIcon={<Refresh />}
             onClick={fetchData}
-            sx={{ 
-              bgcolor: '#1a237e',
-              color: 'white',
-              '&:hover': { bgcolor: '#0d1445' },
+            sx={{
+              borderRadius: 3,
               textTransform: 'none',
-              borderRadius: 2,
+              fontWeight: 700,
+              px: 3, py: 1,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              color: 'white',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
             }}
           >
             Refresh
@@ -363,99 +387,39 @@ const OverstayMonitoring = () => {
 
       {/* Summary Cards */}
       <Grid container spacing={2.5} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            borderLeft: '3px solid #ef5350',
-            borderRadius: 2,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                Overstayed
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ef5350' }}>
-                  {data.summary.overstayedCount || 0}
+        {[
+          { label: 'Overstayed', value: data.summary.overstayedCount || 0, color: '#ef5350', icon: <ErrorIcon /> },
+          { label: 'Expiring Soon', value: data.summary.expiringSoonCount || 0, color: '#ffa726', icon: <Warning /> },
+          { label: 'Total Checked', value: data.summary.totalCitizensChecked || 0, color: '#66bb6a', icon: <CheckCircle /> },
+          { label: 'Active Issues', value: totalIssues, color: totalIssues > 0 ? '#ef5350' : '#66bb6a', icon: <Flag /> },
+        ].map((item, i) => (
+          <Grid item xs={12} sm={6} md={3} key={i}>
+            <Card sx={{
+              borderLeft: `3px solid ${item.color}`,
+              borderRadius: 2,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: `0 8px 24px ${item.color}20` },
+            }}>
+              <CardContent>
+                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                  {item.label}
                 </Typography>
-                <Avatar sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350' }}>
-                  <ErrorIcon />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            borderLeft: '3px solid #ffa726',
-            borderRadius: 2,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                Expiring Soon
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#ffa726' }}>
-                  {data.summary.expiringSoonCount || 0}
-                </Typography>
-                <Avatar sx={{ bgcolor: 'rgba(255, 167, 38, 0.08)', color: '#ffa726' }}>
-                  <Warning />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            borderLeft: '3px solid #66bb6a',
-            borderRadius: 2,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                Total Checked
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h4" sx={{ fontWeight: 700, color: '#66bb6a' }}>
-                  {data.summary.totalCitizensChecked || 0}
-                </Typography>
-                <Avatar sx={{ bgcolor: 'rgba(102, 187, 106, 0.08)', color: '#66bb6a' }}>
-                  <CheckCircle />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            borderLeft: `3px solid ${totalIssues > 0 ? '#ef5350' : '#66bb6a'}`,
-            borderRadius: 2,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-          }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                Active Issues
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="h4" sx={{ 
-                  fontWeight: 700, 
-                  color: totalIssues > 0 ? '#ef5350' : '#66bb6a' 
-                }}>
-                  {totalIssues}
-                </Typography>
-                <Avatar sx={{ 
-                  bgcolor: totalIssues > 0 ? 'rgba(239, 83, 80, 0.08)' : 'rgba(102, 187, 106, 0.08)',
-                  color: totalIssues > 0 ? '#ef5350' : '#66bb6a'
-                }}>
-                  <Flag />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: item.color }}>
+                    {item.value}
+                  </Typography>
+                  <Avatar sx={{ bgcolor: `${item.color}15`, color: item.color, width: 40, height: 40 }}>
+                    {item.icon}
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
       </Grid>
 
-      {/* Filters Section */}
+      {/* Filters */}
       <Paper sx={{ p: 2, mb: 3, borderRadius: 2, bgcolor: '#f8f9fa' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -463,10 +427,10 @@ const OverstayMonitoring = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#111827' }}>
               Filters
             </Typography>
-            <Chip 
-              label={`${totalIssues} results`} 
-              size="small" 
-              sx={{ 
+            <Chip
+              label={`${totalIssues} results`}
+              size="small"
+              sx={{
                 bgcolor: totalIssues > 0 ? 'rgba(25, 118, 210, 0.08)' : 'transparent',
                 color: '#1976d2',
                 fontWeight: 500,
@@ -587,7 +551,7 @@ const OverstayMonitoring = () => {
         </Collapse>
       </Paper>
 
-      {/* Overstayed Citizens Table */}
+      {/* Overstayed Table */}
       {filteredOverstayed.length > 0 && (
         <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
@@ -595,9 +559,9 @@ const OverstayMonitoring = () => {
             <Typography variant="h6" sx={{ color: '#ef5350', fontWeight: 600 }}>
               Overstayed Citizens
             </Typography>
-            <Chip 
-              label={filteredOverstayed.length} 
-              size="small" 
+            <Chip
+              label={filteredOverstayed.length}
+              size="small"
               sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350', fontWeight: 500 }}
             />
           </Box>
@@ -629,64 +593,36 @@ const OverstayMonitoring = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={item.passportNumber || 'N/A'} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={item.passportNumber || 'N/A'} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={item.nationality || 'N/A'} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={item.nationality || 'N/A'} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getDocTypeLabel(item.docType)} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={getDocTypeLabel(item.docType)} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={`${item.daysOverstayed} days`} 
+                      <Chip
+                        label={`${item.daysOverstayed} days`}
                         size="small"
-                        sx={{ 
-                          bgcolor: 'rgba(239, 83, 80, 0.08)',
-                          color: '#ef5350',
-                          fontWeight: 500,
-                        }}
+                        sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350', fontWeight: 500 }}
                       />
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <Hotel sx={{ fontSize: 14, color: '#6b7280' }} />
-                        <Typography variant="body2">
-                          {item.currentAccommodation || 'N/A'}
-                        </Typography>
+                        <Typography variant="body2">{item.currentAccommodation || 'N/A'}</Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label="Overstayed" 
-                        size="small" 
-                        sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350', fontWeight: 500 }}
-                      />
+                      <Chip label="Overstayed" size="small" sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350', fontWeight: 500 }} />
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="View Citizen Details">
                         <IconButton
                           size="small"
                           onClick={() => navigate(`/citizens/${item.citizenId}`)}
-                          sx={{ 
-                            color: '#6b7280',
-                            '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.08)', color: '#1976d2' }
-                          }}
+                          sx={{ color: '#6b7280', '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.08)', color: '#1976d2' } }}
                         >
                           <Visibility />
                         </IconButton>
@@ -700,7 +636,7 @@ const OverstayMonitoring = () => {
         </Paper>
       )}
 
-      {/* Expiring Soon Citizens Table */}
+      {/* Expiring Soon Table */}
       {filteredExpiring.length > 0 && (
         <Paper sx={{ p: 2.5, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
@@ -708,9 +644,9 @@ const OverstayMonitoring = () => {
             <Typography variant="h6" sx={{ color: '#ffa726', fontWeight: 600 }}>
               Expiring Soon
             </Typography>
-            <Chip 
-              label={filteredExpiring.length} 
-              size="small" 
+            <Chip
+              label={filteredExpiring.length}
+              size="small"
               sx={{ bgcolor: 'rgba(255, 167, 38, 0.08)', color: '#ffa726', fontWeight: 500 }}
             />
           </Box>
@@ -742,34 +678,19 @@ const OverstayMonitoring = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={item.passportNumber || 'N/A'} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={item.passportNumber || 'N/A'} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={item.nationality || 'N/A'} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={item.nationality || 'N/A'} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={getDocTypeLabel(item.docType)} 
-                        size="small" 
-                        variant="outlined"
-                        sx={{ borderColor: '#e0e0e0' }}
-                      />
+                      <Chip label={getDocTypeLabel(item.docType)} size="small" variant="outlined" sx={{ borderColor: '#e0e0e0' }} />
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={`${item.daysRemaining} days`} 
+                      <Chip
+                        label={`${item.daysRemaining} days`}
                         size="small"
-                        sx={{ 
+                        sx={{
                           bgcolor: item.daysRemaining <= 2 ? 'rgba(239, 83, 80, 0.08)' : 'rgba(255, 167, 38, 0.08)',
                           color: item.daysRemaining <= 2 ? '#ef5350' : '#ffa726',
                           fontWeight: 500,
@@ -779,27 +700,18 @@ const OverstayMonitoring = () => {
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         <Hotel sx={{ fontSize: 14, color: '#6b7280' }} />
-                        <Typography variant="body2">
-                          {item.currentAccommodation || 'N/A'}
-                        </Typography>
+                        <Typography variant="body2">{item.currentAccommodation || 'N/A'}</Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label="Expiring Soon" 
-                        size="small" 
-                        sx={{ bgcolor: 'rgba(255, 167, 38, 0.08)', color: '#ffa726', fontWeight: 500 }}
-                      />
+                      <Chip label="Expiring Soon" size="small" sx={{ bgcolor: 'rgba(255, 167, 38, 0.08)', color: '#ffa726', fontWeight: 500 }} />
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="View Citizen Details">
                         <IconButton
                           size="small"
                           onClick={() => navigate(`/citizens/${item.citizenId}`)}
-                          sx={{ 
-                            color: '#6b7280',
-                            '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.08)', color: '#1976d2' }
-                          }}
+                          sx={{ color: '#6b7280', '&:hover': { bgcolor: 'rgba(25, 118, 210, 0.08)', color: '#1976d2' } }}
                         >
                           <Visibility />
                         </IconButton>
@@ -816,15 +728,10 @@ const OverstayMonitoring = () => {
       {!hasData && (
         <Paper sx={{ p: 5, textAlign: 'center', borderRadius: 2, bgcolor: '#f8f9fa' }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Box sx={{ 
-              width: 80, 
-              height: 80, 
-              borderRadius: '50%', 
+            <Box sx={{
+              width: 80, height: 80, borderRadius: '50%',
               bgcolor: 'rgba(102, 187, 106, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mb: 2
+              display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2
             }}>
               <CheckCircle sx={{ fontSize: 48, color: '#66bb6a' }} />
             </Box>
@@ -835,9 +742,9 @@ const OverstayMonitoring = () => {
               No overstayed or expiring documents found.
             </Typography>
             {(searchQuery || statusFilter !== 'all' || docTypeFilter !== 'all' || accommodationFilter !== 'all') && (
-              <Button 
-                variant="contained" 
-                onClick={handleClearFilters} 
+              <Button
+                variant="contained"
+                onClick={handleClearFilters}
                 sx={{ mt: 3, textTransform: 'none', borderRadius: 2, bgcolor: '#1976d2' }}
               >
                 Clear All Filters

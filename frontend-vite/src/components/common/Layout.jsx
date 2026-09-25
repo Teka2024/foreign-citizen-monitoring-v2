@@ -42,6 +42,9 @@ import {
   ExpandLess,
   ExpandMore,
   AdminPanelSettings,
+  Logout,
+  Login,
+  SwapHoriz,       // ✅ ADDED
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from './NotificationBell';
@@ -55,7 +58,7 @@ const Layout = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -135,17 +138,18 @@ const Layout = () => {
   if (isOfficerOrAdmin) {
     citizenSubItems.push({
       text: 'Check-In',
-      icon: <CheckCircle />,
+      icon: <Login />,
       path: '/check-in',
     });
   }
   if (isOfficerOrAdmin) {
     citizenSubItems.push({
       text: 'Check-Out',
-      icon: <Cancel />,
+      icon: <Logout />,
       path: '/check-out',
     });
   }
+  
   if (isOfficerOrAdmin) {
     citizenSubItems.push({
       text: 'History',
@@ -169,6 +173,16 @@ const Layout = () => {
     icon: <Hotel />,
     path: '/accommodations',
   });
+
+  // ✅ Transfer Requests (Incoming/Outgoing) - Admin/Officer only
+  if (isOfficerOrAdmin) {
+    menuItems.push({
+      type: 'item',
+      text: 'Transfer Requests',  // ✅ ADDED
+      icon: <SwapHoriz />,
+      path: '/transfers',
+    });
+  }
 
   // Overstay (Admin/Officer only)
   if (isOfficerOrAdmin) {
@@ -221,7 +235,7 @@ const Layout = () => {
         {!collapsed && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, color: 'primary.main' }}>
-              FCMS
+              ICS-FCMS
             </Typography>
             <Chip
               label={user?.role || 'Viewer'}

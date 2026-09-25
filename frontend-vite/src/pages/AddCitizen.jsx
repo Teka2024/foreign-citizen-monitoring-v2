@@ -42,6 +42,8 @@ import {
   UploadFile,
   FilePresent,
   CheckCircle,
+  PersonAdd,
+  ArrowBack,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -74,29 +76,23 @@ const AddCitizen = () => {
     dateOfBirth: '',
     gender: 'male',
     placeOfBirth: { city: '', country: '' },
-    // Entry Document Type: 'visa', 'id', 'stamp', 'other'
     entryDocType: 'visa',
-    // Visa fields
     visaType: '',
     visaNumber: '',
     visaIssueDate: '',
     visaExpiryDate: '',
-    // ID fields
     idNumber: '',
     idType: '',
     idIssueDate: '',
     idExpiryDate: '',
-    // Stamp fields
     stampNumber: '',
-    stampType: 'entry',  // ✅ Default to 'entry'
+    stampType: 'entry',
     stampIssueDate: '',
     stampExpiryDate: '',
-    // Other fields
     otherDocName: '',
     otherDocNumber: '',
     otherIssueDate: '',
     otherExpiryDate: '',
-    // Entry details
     entryDate: new Date().toISOString().split('T')[0],
     expectedExitDate: '',
     entryPort: '',
@@ -140,7 +136,7 @@ const AddCitizen = () => {
     idNumber: '',
     idType: '',
     stampNumber: '',
-    stampType: 'entry',  // ✅ Default to 'entry'
+    stampType: 'entry',
     documentName: '',
     autoFilled: false,
   });
@@ -155,7 +151,7 @@ const AddCitizen = () => {
   const entryDocTypes = [
     { value: 'visa', label: 'Visa' },
     { value: 'id', label: 'ID' },
-    { value: 'stamp', label: 'Stamp' },     
+    { value: 'stamp', label: 'Stamp' },
     { value: 'other', label: 'Other (Special Case)' },
   ];
 
@@ -171,11 +167,9 @@ const AddCitizen = () => {
     'entry', 'exit', 'transit', 'other'
   ];
 
-  // ✅ Auto-fill additional document when docType changes
   useEffect(() => {
     if (!newDocument.docType) return;
 
-    // Check if the selected document type matches the entry document
     if (newDocument.docType === formData.entryDocType) {
       const autoFillData = { autoFilled: true };
 
@@ -203,7 +197,6 @@ const AddCitizen = () => {
         autoFillData.expiryDate = formData.otherExpiryDate;
       }
 
-      // Only auto-fill if the fields are not empty
       if (autoFillData.issueDate || autoFillData.expiryDate || autoFillData.visaType || autoFillData.idType) {
         setNewDocument(prev => ({
           ...prev,
@@ -212,7 +205,6 @@ const AddCitizen = () => {
         toast.info('Auto-filled from Entry Document!');
       }
     } else {
-      // Reset auto-fill flag when different type is selected
       setNewDocument(prev => ({
         ...prev,
         autoFilled: false,
@@ -261,7 +253,6 @@ const AddCitizen = () => {
     }
   };
 
-  // ✅ Handle Passport File Upload
   const handlePassportFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -276,7 +267,6 @@ const AddCitizen = () => {
     e.target.value = '';
   };
 
-  // ✅ Handle Entry Document File Upload
   const handleEntryDocFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -407,44 +397,58 @@ const AddCitizen = () => {
     setOpenViewDialog(true);
   };
 
-  // ✅ Fixed: handleSubmit - ONLY send fields that have values
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    // ✅ VALIDATION: Photo, Passport File, and Entry Document File are MANDATORY
+    if (!photo) {
+      setError('Passport photo is required. Please upload a photo.');
+      toast.error('Passport photo is required');
+      setActiveStep(0);
+      return;
+    }
+
+    if (!passportFile) {
+      setError('Passport document file is required. Please upload the passport.');
+      toast.error('Passport document file is required');
+      setActiveStep(0);
+      return;
+    }
+
+    if (!entryDocFile) {
+      setError('Entry document file is required. Please upload the entry document.');
+      toast.error('Entry document file is required');
+      setActiveStep(1);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const formDataToSend = new FormData();
 
-      // Helper to check if we should include a field based on entryDocType
       const shouldIncludeField = (key) => {
-        // Visa fields - only include if entryDocType is 'visa'
         if (['visaType', 'visaNumber', 'visaIssueDate', 'visaExpiryDate'].includes(key)) {
           return formData.entryDocType === 'visa';
         }
-        // ID fields - only include if entryDocType is 'id'
         if (['idNumber', 'idType', 'idIssueDate', 'idExpiryDate'].includes(key)) {
           return formData.entryDocType === 'id';
         }
-        // Stamp fields - only include if entryDocType is 'stamp'
         if (['stampNumber', 'stampType', 'stampIssueDate', 'stampExpiryDate'].includes(key)) {
           return formData.entryDocType === 'stamp';
         }
-        // Other fields - only include if entryDocType is 'other'
         if (['otherDocName', 'otherDocNumber', 'otherIssueDate', 'otherExpiryDate'].includes(key)) {
           return formData.entryDocType === 'other';
         }
         return true;
       };
 
-      // Process all form fields
       for (const [key, value] of Object.entries(formData)) {
-        // Skip if the field should not be included
         if (!shouldIncludeField(key)) {
           continue;
         }
 
-        // Handle nested objects
         if (typeof value === 'object' && value !== null) {
           if (key === 'personalContact' || key === 'placeOfBirth' || key === 'employment' || key === 'education') {
             for (const [subKey, subValue] of Object.entries(value)) {
@@ -461,33 +465,27 @@ const AddCitizen = () => {
               }
             }
           } else {
-            // For other objects, skip them (they shouldn't be sent directly)
             continue;
           }
         } else {
-          // Simple key-value pair
           if (value !== null && value !== undefined && value !== '') {
             formDataToSend.append(key, value);
           }
         }
       }
 
-      // Add photo
       if (photo) {
         formDataToSend.append('photo', photo);
       }
 
-      // Add passport file
       if (passportFile) {
         formDataToSend.append('passportFile', passportFile);
       }
 
-      // Add entry document file
       if (entryDocFile) {
         formDataToSend.append('entryDocumentFile', entryDocFile);
       }
 
-      // Add documents
       documents.forEach((doc, index) => {
         formDataToSend.append(`documents[${index}].docType`, doc.docType);
         formDataToSend.append(`documents[${index}].issueDate`, doc.issueDate);
@@ -542,9 +540,82 @@ const AddCitizen = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Typography variant="h5" gutterBottom>
-        Register New Citizen
-      </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+            }}>
+              <PersonAdd sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Add New Citizen
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Add a new foreign citizen to the system
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              startIcon={<ArrowBack />}
+              onClick={() => navigate('/citizens')}
+              sx={{
+                borderRadius: 3,
+                textTransform: 'none',
+                fontWeight: 700,
+                px: 3, py: 1,
+                bgcolor: 'rgba(255,255,255,0.15)',
+                color: 'white',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+              }}
+            >
+              Back to List
+            </Button>
+          </Box>
+        </Box>
+      </Paper>
 
       <Paper sx={{ p: 3 }}>
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -565,14 +636,13 @@ const AddCitizen = () => {
           {/* STEP 1: Personal Information */}
           {activeStep === 0 && (
             <Grid container spacing={3}>
-              {/* Photo Upload */}
               <Grid item xs={12} md={3}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <Avatar src={photoPreview} sx={{ width: 150, height: 150, mb: 2 }}>
                     {!photoPreview && <PhotoCamera sx={{ fontSize: 60 }} />}
                   </Avatar>
                   <Button variant="outlined" component="label" startIcon={<PhotoCamera />} sx={{ mb: 1 }}>
-                    Upload Photo
+                    Upload Photo *
                     <input type="file" accept="image/*" hidden onChange={handlePhotoChange} />
                   </Button>
                   {photo && (
@@ -583,7 +653,6 @@ const AddCitizen = () => {
                 </Box>
               </Grid>
 
-              {/* Personal Info */}
               <Grid item xs={12} md={9}>
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
@@ -607,12 +676,11 @@ const AddCitizen = () => {
                 </Grid>
               </Grid>
 
-              {/* Passport File Upload */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle1" gutterBottom>
                   <FilePresent sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Passport Document Upload
+                  Passport Document Upload <span style={{ color: '#ef4444' }}>*</span>
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <Button
@@ -621,7 +689,7 @@ const AddCitizen = () => {
                     startIcon={<CloudUpload />}
                     sx={{ height: 56, minWidth: 200 }}
                   >
-                    Upload Passport File
+                    Upload Passport File *
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
@@ -644,13 +712,12 @@ const AddCitizen = () => {
                   )}
                   {!passportFileName && (
                     <Typography variant="caption" color="textSecondary">
-                      Upload passport document (PDF or Image, max 10MB)
+                      Upload passport document (PDF or Image, max 10MB) - Required
                     </Typography>
                   )}
                 </Box>
               </Grid>
 
-              {/* Personal Details */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle1" gutterBottom>
@@ -696,7 +763,6 @@ const AddCitizen = () => {
           {/* STEP 2: Entry Document & Details */}
           {activeStep === 1 && (
             <Grid container spacing={3}>
-              {/* Entry Document Type Selection */}
               <Grid item xs={12}>
                 <Typography variant="subtitle1" gutterBottom>
                   <InsertDriveFile sx={{ mr: 1, verticalAlign: 'middle' }} />
@@ -725,7 +791,6 @@ const AddCitizen = () => {
                 </TextField>
               </Grid>
 
-              {/* Entry Document File Upload */}
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <Button
@@ -734,7 +799,7 @@ const AddCitizen = () => {
                     startIcon={<CloudUpload />}
                     sx={{ height: 56, minWidth: 200 }}
                   >
-                    Upload Entry Document
+                    Upload Entry Document *
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
@@ -757,13 +822,12 @@ const AddCitizen = () => {
                   )}
                   {!entryDocFileName && (
                     <Typography variant="caption" color="textSecondary">
-                      Upload entry document (PDF or Image, max 10MB)
+                      Upload entry document (PDF or Image, max 10MB) - Required
                     </Typography>
                   )}
                 </Box>
               </Grid>
 
-              {/* Visa Fields (shown when entryDocType === 'visa') */}
               {formData.entryDocType === 'visa' && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -820,7 +884,6 @@ const AddCitizen = () => {
                 </>
               )}
 
-              {/* ID Fields (shown when entryDocType === 'id') */}
               {formData.entryDocType === 'id' && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -877,7 +940,6 @@ const AddCitizen = () => {
                 </>
               )}
 
-              {/* Stamp Fields (shown when entryDocType === 'stamp') */}
               {formData.entryDocType === 'stamp' && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -934,7 +996,6 @@ const AddCitizen = () => {
                 </>
               )}
 
-              {/* Other Document Fields (shown when entryDocType === 'other') */}
               {formData.entryDocType === 'other' && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -984,7 +1045,6 @@ const AddCitizen = () => {
                 </>
               )}
 
-              {/* Entry Details */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" gutterBottom>
@@ -997,13 +1057,12 @@ const AddCitizen = () => {
                 <TextField required fullWidth label="Entry Date" name="entryDate" type="date" value={formData.entryDate} onChange={handleChange} InputLabelProps={{ shrink: true }} />
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField required fullWidth label="Expected Exit Date" name="expectedExitDate" type="date" value={formData.expectedExitDate} onChange={handleChange} InputLabelProps={{ shrink: true }} />
+                <TextField fullWidth label="Expected Exit Date" name="expectedExitDate" type="date" value={formData.expectedExitDate} onChange={handleChange} InputLabelProps={{ shrink: true }} />
               </Grid>
               <Grid item xs={12}>
                 <TextField required fullWidth label="Entry Port" name="entryPort" value={formData.entryPort} onChange={handleChange} />
               </Grid>
 
-              {/* Additional Documents Section */}
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle1" gutterBottom>
@@ -1038,7 +1097,6 @@ const AddCitizen = () => {
                 )}
               </Grid>
 
-              {/* Additional Document Type-Specific Fields */}
               {newDocument.docType === 'visa' && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -1179,7 +1237,6 @@ const AddCitizen = () => {
                 </Grid>
               )}
 
-              {/* Common fields for additional documents */}
               {newDocument.docType && (
                 <>
                   <Grid item xs={12} sm={6}>
@@ -1257,9 +1314,9 @@ const AddCitizen = () => {
                       Add Document
                     </Button>
                     {newDocument.autoFilled && (
-                      <Button 
-                        variant="text" 
-                        color="warning" 
+                      <Button
+                        variant="text"
+                        color="warning"
                         onClick={() => {
                           setNewDocument(prev => ({
                             ...prev,
@@ -1282,7 +1339,6 @@ const AddCitizen = () => {
                 </>
               )}
 
-              {/* Display added documents */}
               {documents.length > 0 && (
                 <Grid item xs={12}>
                   <Divider sx={{ my: 2 }} />
@@ -1297,10 +1353,10 @@ const AddCitizen = () => {
                         sx={{ p: 2, flex: '1 1 200px', maxWidth: 250, borderColor: doc.autoFilled ? 'success.main' : 'default' }}
                       >
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Chip 
-                            label={doc.docType} 
-                            size="small" 
-                            color={doc.autoFilled ? 'success' : 'primary'} 
+                          <Chip
+                            label={doc.docType}
+                            size="small"
+                            color={doc.autoFilled ? 'success' : 'primary'}
                             icon={doc.autoFilled ? <CheckCircle /> : undefined}
                           />
                           <IconButton size="small" color="error" onClick={() => removeDocument(doc.id)}>
@@ -1427,7 +1483,6 @@ const AddCitizen = () => {
         </form>
       </Paper>
 
-      {/* View Document Dialog */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

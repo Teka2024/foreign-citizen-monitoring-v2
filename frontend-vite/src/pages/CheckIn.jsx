@@ -26,6 +26,7 @@ import {
   Business,
   Person,
   CalendarToday,
+  Login,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -37,7 +38,6 @@ const CheckIn = () => {
   const { user } = useAuth();
   const isOfficer = user?.role === 'admin' || user?.role === 'officer';
 
-  // ✅ Redirect if not officer
   useEffect(() => {
     if (!isOfficer) {
       toast.error('You do not have permission to access this page');
@@ -138,17 +138,17 @@ const CheckIn = () => {
   };
 
   const handleSelectAccommodation = (accommodation) => {
-    const capacity = typeof accommodation.capacity === 'object' 
-      ? accommodation.capacity?.available || 0 
+    const capacity = typeof accommodation.capacity === 'object'
+      ? accommodation.capacity?.available || 0
       : accommodation.capacity || 0;
     const currentOccupants = accommodation.currentOccupants || 0;
-    
+
     if (currentOccupants >= capacity && capacity > 0) {
       toast.warning('This accommodation is fully booked');
       setError('Accommodation is at full capacity');
       return;
     }
-    
+
     setSelectedAccommodation(accommodation);
     setStep(3);
   };
@@ -197,20 +197,58 @@ const CheckIn = () => {
     return capacity || 0;
   };
 
-  // If not officer, show nothing (redirecting)
   if (!isOfficer) {
     return null;
   }
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          Check-In Citizen
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-          Register a foreign citizen's accommodation check-in
-        </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, position: 'relative', zIndex: 1 }}>
+          <Box sx={{
+            width: 48, height: 48, borderRadius: 3,
+            bgcolor: 'rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(10px)',
+            flexShrink: 0,
+          }}>
+            <Login sx={{ fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+              Check-In Citizen
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+              Register a foreign citizen's accommodation check-in
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
 
       {/* Stepper */}

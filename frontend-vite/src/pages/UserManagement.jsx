@@ -125,7 +125,6 @@ const UserManagement = () => {
     setError('');
     setSuccess('');
 
-    // ✅ Validate: If role is officer, accommodationId is required
     if (formData.role === 'officer' && !formData.accommodationId) {
       setError('Accommodation is required for Officer role');
       toast.error('Accommodation is required for Officer role');
@@ -230,22 +229,72 @@ const UserManagement = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white', borderRadius: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h5" gutterBottom>
-              User Management
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              Manage system users and their permissions
-            </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+              flexShrink: 0,
+            }}>
+              <People sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                User Management
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Manage system users and their permissions
+              </Typography>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Tooltip title="Refresh">
               <IconButton
-                sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' } }}
                 onClick={fetchUsers}
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.15)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                }}
               >
                 <Refresh />
               </IconButton>
@@ -253,8 +302,17 @@ const UserManagement = () => {
             <Button
               variant="contained"
               startIcon={<PersonAdd />}
-              sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
               onClick={() => setShowCreateModal(true)}
+              sx={{
+                borderRadius: 3,
+                textTransform: 'none',
+                fontWeight: 700,
+                px: 3, py: 1,
+                bgcolor: 'white',
+                color: '#1565c0',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                '&:hover': { bgcolor: '#f1f5f9' },
+              }}
             >
               Create User
             </Button>
@@ -263,39 +321,37 @@ const UserManagement = () => {
       </Paper>
 
       {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'primary.light', color: 'white' }}>
-            <CardContent>
-              <Typography variant="caption">Total Users</Typography>
-              <Typography variant="h4">{total}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'success.light', color: 'white' }}>
-            <CardContent>
-              <Typography variant="caption">Active Users</Typography>
-              <Typography variant="h4">{users.filter(u => u.isActive).length}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'error.light', color: 'white' }}>
-            <CardContent>
-              <Typography variant="caption">Admins</Typography>
-              <Typography variant="h4">{users.filter(u => u.role === 'admin').length}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ bgcolor: 'warning.light', color: 'white' }}>
-            <CardContent>
-              <Typography variant="caption">Officers</Typography>
-              <Typography variant="h4">{users.filter(u => u.role === 'officer').length}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        {[
+          { label: 'Total Users', value: total, color: '#1976d2', icon: <People /> },
+          { label: 'Active Users', value: users.filter(u => u.isActive).length, color: '#22c55e', icon: <CheckCircle /> },
+          { label: 'Admins', value: users.filter(u => u.role === 'admin').length, color: '#ef5350', icon: <AdminPanelSettings /> },
+          { label: 'Officers', value: users.filter(u => u.role === 'officer').length, color: '#f59e0b', icon: <VerifiedUser /> },
+        ].map((item, i) => (
+          <Grid item xs={12} sm={6} md={3} key={i}>
+            <Card sx={{
+              borderLeft: `3px solid ${item.color}`,
+              borderRadius: 2,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: `0 8px 24px ${item.color}20` },
+            }}>
+              <CardContent>
+                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                  {item.label}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: item.color }}>
+                    {item.value}
+                  </Typography>
+                  <Avatar sx={{ bgcolor: `${item.color}15`, color: item.color, width: 40, height: 40 }}>
+                    {item.icon}
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
       </Grid>
 
       {/* Search */}
@@ -315,10 +371,10 @@ const UserManagement = () => {
               ),
             }}
           />
-          <Button variant="contained" onClick={handleSearch}>
+          <Button variant="contained" onClick={handleSearch} sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 600 }}>
             Search
           </Button>
-          <Button variant="outlined" onClick={() => { setSearchQuery(''); fetchUsers(); }}>
+          <Button variant="outlined" onClick={() => { setSearchQuery(''); fetchUsers(); }} sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 600 }}>
             Clear
           </Button>
         </Box>
@@ -497,7 +553,7 @@ const UserManagement = () => {
               required
               helperText="Minimum 6 characters"
             />
-            
+
             <TextField
               fullWidth
               select
@@ -505,12 +561,10 @@ const UserManagement = () => {
               value={formData.role}
               onChange={(e) => {
                 const role = e.target.value;
-                setFormData({ 
-                  ...formData, 
+                setFormData({
+                  ...formData,
                   role,
-                  // If role is officer, set department to accommodation
                   department: role === 'officer' ? 'accommodation' : formData.department,
-                  // Reset accommodationId if role is not officer
                   accommodationId: role === 'officer' ? formData.accommodationId : '',
                 });
               }}
@@ -521,7 +575,6 @@ const UserManagement = () => {
               <MenuItem value="admin">Admin</MenuItem>
             </TextField>
 
-            {/* ✅ Show accommodation selection only for Officer role */}
             {formData.role === 'officer' && (
               <TextField
                 fullWidth
@@ -568,9 +621,9 @@ const UserManagement = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowCreateModal(false)}>Cancel</Button>
-          <Button 
-            variant="contained" 
-            onClick={handleCreateUser} 
+          <Button
+            variant="contained"
+            onClick={handleCreateUser}
             disabled={loading || (formData.role === 'officer' && !formData.accommodationId)}
           >
             {loading ? 'Creating...' : 'Create User'}

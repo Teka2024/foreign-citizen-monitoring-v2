@@ -20,7 +20,7 @@ import {
   CircularProgress,
   Tooltip,
 } from '@mui/material';
-import { Search, Add, Visibility, Edit, Delete, Refresh } from '@mui/icons-material';
+import { Search, Add, Visibility, Edit, Delete, Refresh, People } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -109,76 +109,36 @@ const CitizensList = () => {
     }
   };
 
-  // ✅ Helper function to get document display info
   const getDocumentDisplay = (citizen) => {
     const entryDocType = citizen.entryDocType || 'visa';
-
-    // If entry document type is visa, show visa type
     if (entryDocType === 'visa') {
       const visaType = citizen.visaType || 'Visa';
-      return {
-        label: visaType.charAt(0).toUpperCase() + visaType.slice(1),
-        color: 'primary',
-        icon: '🛂',
-      };
+      return { label: visaType.charAt(0).toUpperCase() + visaType.slice(1), color: 'primary', icon: '🛂' };
     }
-
-    // For ID
     if (entryDocType === 'id') {
       const idType = citizen.idType
         ? citizen.idType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         : 'ID';
-      return {
-        label: idType,
-        color: 'info',
-        icon: '🆔',
-      };
+      return { label: idType, color: 'info', icon: '🆔' };
     }
-
-    // For Stamp
     if (entryDocType === 'stamp') {
       const stampType = citizen.stampType
         ? citizen.stampType.charAt(0).toUpperCase() + citizen.stampType.slice(1) + ' Stamp'
         : 'Stamp';
-      return {
-        label: stampType,
-        color: 'warning',
-        icon: '📌',
-      };
+      return { label: stampType, color: 'warning', icon: '📌' };
     }
-
-    // For Other
     if (entryDocType === 'other') {
-      return {
-        label: citizen.otherDocName || 'Other Document',
-        color: 'secondary',
-        icon: '📄',
-      };
+      return { label: citizen.otherDocName || 'Other Document', color: 'secondary', icon: '📄' };
     }
-
-    return {
-      label: 'N/A',
-      color: 'default',
-      icon: '',
-    };
+    return { label: 'N/A', color: 'default', icon: '' };
   };
 
-  // ✅ Helper to get tooltip text
   const getDocumentTooltip = (citizen) => {
     const entryDocType = citizen.entryDocType || 'visa';
-
-    if (entryDocType === 'visa') {
-      return `Entry Document: Visa\nVisa Type: ${citizen.visaType || 'N/A'}`;
-    }
-    if (entryDocType === 'id') {
-      return `Entry Document: ID\nID Type: ${citizen.idType || 'N/A'}`;
-    }
-    if (entryDocType === 'stamp') {
-      return `Entry Document: Stamp\nStamp Type: ${citizen.stampType || 'N/A'}`;
-    }
-    if (entryDocType === 'other') {
-      return `Entry Document: Other\nDocument: ${citizen.otherDocName || 'N/A'}`;
-    }
+    if (entryDocType === 'visa') return `Entry Document: Visa\nVisa Type: ${citizen.visaType || 'N/A'}`;
+    if (entryDocType === 'id') return `Entry Document: ID\nID Type: ${citizen.idType || 'N/A'}`;
+    if (entryDocType === 'stamp') return `Entry Document: Stamp\nStamp Type: ${citizen.stampType || 'N/A'}`;
+    if (entryDocType === 'other') return `Entry Document: Other\nDocument: ${citizen.otherDocName || 'N/A'}`;
     return 'Entry Document: N/A';
   };
 
@@ -192,29 +152,103 @@ const CitizensList = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5">Citizens</Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={fetchCitizens}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-          {/* Show Add button only for Admin and Officer */}
-          {(isAdmin || isOfficer) && (
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+            }}>
+              <People sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Citizens
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Manage all registered foreign citizens
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Button
               variant="contained"
-              startIcon={<Add />}
-              onClick={() => navigate('/citizens/add')}
+              startIcon={<Refresh />}
+              onClick={fetchCitizens}
+              disabled={loading}
+              sx={{
+                borderRadius: 3,
+                textTransform: 'none',
+                fontWeight: 700,
+                px: 3, py: 1,
+                bgcolor: 'rgba(255,255,255,0.15)',
+                color: 'white',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                '&.Mui-disabled': { color: 'rgba(255,255,255,0.5)' },
+              }}
             >
-              Add Citizen
+              Refresh
             </Button>
-          )}
+            {(isAdmin || isOfficer) && (
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={() => navigate('/citizens/add')}
+                sx={{
+                  borderRadius: 3,
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  px: 3, py: 1,
+                  bgcolor: 'white',
+                  color: '#1565c0',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  '&:hover': { bgcolor: '#f1f5f9' },
+                }}
+              >
+                Add Citizen
+              </Button>
+            )}
+          </Box>
         </Box>
-      </Box>
+      </Paper>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -222,7 +256,6 @@ const CitizensList = () => {
         </Alert>
       )}
 
-      {/* Show info alert for viewers */}
       {isViewer && (
         <Alert severity="info" sx={{ mb: 2 }}>
           <strong>View-Only Mode:</strong> You can view citizen information but cannot edit or delete.
@@ -309,7 +342,6 @@ const CitizensList = () => {
                       />
                     </TableCell>
                     <TableCell>
-                      {/* View button - visible to all roles */}
                       <IconButton
                         onClick={() => navigate(`/citizens/${citizen._id}`)}
                         size="small"
@@ -317,8 +349,6 @@ const CitizensList = () => {
                       >
                         <Visibility />
                       </IconButton>
-
-                      {/* Edit button - only for Admin and Officer */}
                       {(isAdmin || isOfficer) && (
                         <IconButton
                           onClick={() => navigate(`/citizens/${citizen._id}/edit`)}
@@ -329,8 +359,6 @@ const CitizensList = () => {
                           <Edit />
                         </IconButton>
                       )}
-
-                      {/* Delete button - only for Admin */}
                       {isAdmin && (
                         <IconButton
                           onClick={() => handleDelete(citizen._id)}

@@ -47,7 +47,7 @@ const Reports = () => {
   const isAdmin = user?.role === 'admin';
   const isOfficer = user?.role === 'officer';
   const isViewer = user?.role === 'viewer';
-  
+
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState([]);
   const [error, setError] = useState('');
@@ -111,27 +111,27 @@ const Reports = () => {
       }
 
       const response = await api.get(endpoint, { params });
-      
+
       let data = [];
       let count = 0;
 
       if (filters.type === 'overstays') {
         const overstayData = response.data.data || response.data;
         const rawOverstays = overstayData.overstayed || [];
-        
+
         const enrichedOverstays = [];
         for (const item of rawOverstays) {
           try {
             const citizenRes = await api.get(`/citizens/${item.citizenId}`);
             const citizen = citizenRes.data.citizen || citizenRes.data;
-            
+
             let accommodationName = item.currentAccommodation || 'N/A';
             let roomNumber = 'N/A';
             let checkInDate = 'N/A';
             let expectedCheckOutDate = 'N/A';
             let purpose = 'N/A';
             let docType = item.docType || citizen.visaType || 'N/A';
-            
+
             try {
               const historyRes = await api.get(`/accommodations/history/${item.citizenId}`);
               const histories = historyRes.data.data || [];
@@ -206,17 +206,13 @@ const Reports = () => {
         }
 
         if (filters.type === 'checkouts') {
-          rawData = rawData.filter(item => 
-            item.status === 'checked_out'
-          );
+          rawData = rawData.filter(item => item.status === 'checked_out');
         }
 
-        // Get all passport numbers from the data
         const passportNumbers = rawData
           .map(item => item.citizen?.passportNumber)
           .filter(p => p);
 
-        // Create a cache for citizen names
         const citizenNameCache = {};
         if (passportNumbers.length > 0) {
           try {
@@ -235,14 +231,14 @@ const Reports = () => {
         data = rawData.map(item => {
           const passport = item.citizen?.passportNumber;
           const citizenName = passport && citizenNameCache[passport] ? citizenNameCache[passport] : 'N/A';
-          
+
           let accommodationName = 'N/A';
           if (item.accommodation?.name) {
             accommodationName = item.accommodation.name;
           } else if (item.accommodationId?.name) {
             accommodationName = item.accommodationId.name;
           }
-          
+
           return {
             ...item,
             citizenName: citizenName,
@@ -266,7 +262,7 @@ const Reports = () => {
       }
 
       setReportData(data);
-      
+
       if (data.length === 0) {
         toast.info(`No ${filters.type} records found for the selected period`);
       } else {
@@ -434,48 +430,48 @@ const Reports = () => {
   };
 
   const renderValue = (key, value, item) => {
-    if (key === '_id' || key === '__v' || key === 'displayName' || key === 'id' || 
-        key === 'citizenId' || key === 'accommodationId' || key === 'checkedInBy' || 
+    if (key === '_id' || key === '__v' || key === 'displayName' || key === 'id' ||
+        key === 'citizenId' || key === 'accommodationId' || key === 'checkedInBy' ||
         key === 'checkedOutBy' || key === 'citizenData' || key === 'docType') {
       return null;
     }
-    
+
     if (key === 'citizenName' || key === 'citizen' || key === 'fullName' || key === 'citizenFullName') {
       return getCitizenName(item);
     }
-    
+
     if (key === 'passportNumber' || key === 'citizenPassport') {
       return getCitizenPassport(item);
     }
-    
+
     if (key === 'accommodation' || key === 'accommodationName' || key === 'currentAccommodation') {
       return getAccommodationName(item);
     }
-    
+
     if (key === 'roomNumber') {
       return item.roomNumber || 'N/A';
     }
-    
+
     if (key === 'documentType') {
       return getDocTypeLabel(value);
     }
-    
+
     if (key === 'status') {
       return <Chip label={getStatusLabel(value)} color={getStatusColor(value)} size="small" />;
     }
-    
+
     if (key === 'riskLevel') {
       return <Chip label={value || 'N/A'} color={getRiskColor(value)} size="small" />;
     }
-    
+
     if (key === 'purpose') {
       return getPurposeLabel(value);
     }
-    
+
     if (key === 'daysOverstayed') {
       return `${value} days`;
     }
-    
+
     if (key === 'daysRemaining') {
       return `${value} days`;
     }
@@ -483,14 +479,14 @@ const Reports = () => {
     if (key === 'address') {
       return formatAddress(value);
     }
-    
-    if (key === 'entryDate' || key === 'checkInDate' || key === 'createdAt' || 
-        key === 'expectedCheckOutDate' || key === 'actualCheckOutDate' || 
+
+    if (key === 'entryDate' || key === 'checkInDate' || key === 'createdAt' ||
+        key === 'expectedCheckOutDate' || key === 'actualCheckOutDate' ||
         key === 'dateOfBirth' || key === 'visaIssueDate' || key === 'visaExpiryDate' ||
         key === 'checkOutDate' || key === 'expectedExitDate' || key === 'expiryDate') {
       return formatDate(value);
     }
-    
+
     if (typeof value === 'object' && value !== null) {
       if (Array.isArray(value)) {
         return value.join(', ');
@@ -503,26 +499,17 @@ const Reports = () => {
       }
       return JSON.stringify(value);
     }
-    
+
     return value || 'N/A';
   };
 
   const getTableHeaders = () => {
     if (filters.type === 'overstays') {
       const columns = [
-        'status',
-        'citizenFullName',
-        'citizenPassport',
-        'accommodation',
-        'roomNumber',
-        'documentType',
-        'checkInDate',
-        'expectedCheckOutDate',
-        'daysOverstayed',
-        'purpose',
-        'riskLevel'
+        'status', 'citizenFullName', 'citizenPassport', 'accommodation',
+        'roomNumber', 'documentType', 'checkInDate', 'expectedCheckOutDate',
+        'daysOverstayed', 'purpose', 'riskLevel'
       ];
-      
       const friendlyNames = {
         'status': 'Status',
         'citizenFullName': 'Citizen',
@@ -536,24 +523,17 @@ const Reports = () => {
         'purpose': 'Purpose',
         'riskLevel': 'Risk Level'
       };
-      
       return columns.map(key => ({
         key: key,
         label: friendlyNames[key] || key.replace(/([A-Z])/g, ' $1').trim()
       }));
     }
-    
+
     if (filters.type === 'checkins' || filters.type === 'checkouts') {
       const columns = [
-        'status',
-        'checkInDate',
-        'accommodation',
-        'citizenName',
-        'expectedCheckOutDate',
-        'purpose',
-        'roomNumber'
+        'status', 'checkInDate', 'accommodation', 'citizenName',
+        'expectedCheckOutDate', 'purpose', 'roomNumber'
       ];
-      
       const friendlyNames = {
         'status': 'Status',
         'checkInDate': 'Check-In Date',
@@ -563,19 +543,18 @@ const Reports = () => {
         'purpose': 'Purpose',
         'roomNumber': 'Room Number'
       };
-      
       return columns.map(key => ({
         key: key,
         label: friendlyNames[key] || key.replace(/([A-Z])/g, ' $1').trim()
       }));
     }
-    
+
     if (reportData.length === 0) return [];
-    
+
     const allKeys = Object.keys(reportData[0]);
     const excludeFields = ['_id', '__v', 'createdAt', 'updatedAt', 'displayName', 'id'];
     const filteredKeys = allKeys.filter(key => !excludeFields.includes(key));
-    
+
     return filteredKeys.map(key => ({
       key: key,
       label: key.replace(/([A-Z])/g, ' $1').trim()
@@ -586,10 +565,10 @@ const Reports = () => {
 
   const getSummaryStats = () => {
     if (reportData.length === 0) return null;
-    
+
     const total = reportData.length;
     let active = 0, inactive = 0, highRisk = 0;
-    
+
     reportData.forEach(item => {
       const status = item.status?.toLowerCase() || '';
       if (status === 'active') active++;
@@ -604,72 +583,99 @@ const Reports = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      <Paper sx={{ 
-        p: 3, 
-        mb: 3, 
-        background: 'linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%)',
-        color: '#1a237e',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-        borderRadius: 2 
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
-              <Assessment sx={{ mr: 1, verticalAlign: 'middle', color: '#1a237e' }} />
-              Reports Dashboard
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.7 }}>
-              Generate and export comprehensive reports for your data
-            </Typography>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+              flexShrink: 0,
+            }}>
+              <Assessment sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Reports Dashboard
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Generate and export comprehensive reports for your data
+              </Typography>
+              <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                <Chip
+                  label={isAdmin ? 'Admin' : isOfficer ? 'Officer' : 'Viewer'}
+                  size="small"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 600 }}
+                />
+              </Box>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Tooltip title="Refresh">
-              <IconButton 
-                sx={{ 
-                  bgcolor: 'rgba(26, 35, 126, 0.08)',
-                  color: '#1a237e',
-                  '&:hover': { bgcolor: 'rgba(26, 35, 126, 0.15)' }
-                }}
+              <IconButton
                 onClick={() => generateReport()}
                 disabled={loading}
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.15)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                }}
               >
                 <Refresh />
               </IconButton>
             </Tooltip>
             <Tooltip title="Print">
-              <IconButton 
-                sx={{ 
-                  bgcolor: 'rgba(26, 35, 126, 0.08)',
-                  color: '#1a237e',
-                  '&:hover': { bgcolor: 'rgba(26, 35, 126, 0.15)' }
-                }}
+              <IconButton
                 onClick={() => window.print()}
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.15)',
+                  color: 'white',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+                }}
               >
                 <Print />
               </IconButton>
             </Tooltip>
           </Box>
-        </Box>
-        <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-          <Chip 
-            label={isAdmin ? 'Admin' : isOfficer ? 'Officer' : 'Viewer'} 
-            color={isAdmin ? 'error' : isOfficer ? 'warning' : 'info'}
-            size="small"
-            sx={{ 
-              bgcolor: 'rgba(26, 35, 126, 0.08)',
-              color: '#1a237e',
-              fontWeight: 500,
-            }}
-          />
-          <Chip 
-            label="Full Access" 
-            size="small"
-            sx={{ 
-              bgcolor: 'rgba(26, 35, 126, 0.08)',
-              color: '#1a237e',
-              fontWeight: 500,
-            }}
-          />
         </Box>
       </Paper>
 
@@ -742,13 +748,15 @@ const Reports = () => {
               onClick={generateReport}
               disabled={loading}
               startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <Assessment />}
-              sx={{ 
+              sx={{
                 height: 56,
-                background: 'linear-gradient(135deg, #1a237e 0%, #0d1445 100%)',
+                background: 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #0d1445 0%, #070a2a 100%)',
+                  background: 'linear-gradient(135deg, #0d47a1 0%, #072e6b 100%)',
                 },
                 textTransform: 'none',
+                borderRadius: 2,
+                fontWeight: 700,
               }}
             >
               {loading ? 'Generating...' : 'Generate Report'}
@@ -757,7 +765,7 @@ const Reports = () => {
         </Grid>
         <Box sx={{ mt: 2 }}>
           <Alert severity="info" variant="outlined" sx={{ fontSize: '0.875rem' }}>
-            <strong>Report Access:</strong> All users can generate and export reports. 
+            <strong>Report Access:</strong> All users can generate and export reports.
             {isOfficer && ' You can only see data for your assigned accommodation.'}
             {isViewer && ' You have full view access to all data.'}
           </Alert>
@@ -765,75 +773,37 @@ const Reports = () => {
       </Paper>
 
       {reportData.length > 0 && stats && (
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ borderLeft: '3px solid #1a237e', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <CardContent>
-                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                  Total Records
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#1a237e' }}>
-                    {stats.total}
+        <Grid container spacing={2.5} sx={{ mb: 3 }}>
+          {[
+            { label: 'Total Records', value: stats.total, color: '#1976d2', icon: <Assessment /> },
+            { label: 'Active', value: stats.active, color: '#66bb6a', icon: <CheckCircle /> },
+            { label: 'Inactive', value: stats.inactive, color: '#ffa726', icon: <Warning /> },
+            { label: 'High Risk', value: stats.highRisk, color: '#ef5350', icon: <ErrorIcon /> },
+          ].map((item, i) => (
+            <Grid item xs={12} sm={6} md={3} key={i}>
+              <Card sx={{
+                borderLeft: `3px solid ${item.color}`,
+                borderRadius: 2,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                transition: 'all 0.3s ease',
+                '&:hover': { transform: 'translateY(-2px)', boxShadow: `0 8px 24px ${item.color}20` },
+              }}>
+                <CardContent>
+                  <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                    {item.label}
                   </Typography>
-                  <Avatar sx={{ bgcolor: 'rgba(26, 35, 126, 0.08)', color: '#1a237e' }}>
-                    <Assessment />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ borderLeft: '3px solid #66bb6a', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <CardContent>
-                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                  Active
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#66bb6a' }}>
-                    {stats.active}
-                  </Typography>
-                  <Avatar sx={{ bgcolor: 'rgba(102, 187, 106, 0.08)', color: '#66bb6a' }}>
-                    <CheckCircle />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ borderLeft: '3px solid #ffa726', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <CardContent>
-                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                  Inactive
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ffa726' }}>
-                    {stats.inactive}
-                  </Typography>
-                  <Avatar sx={{ bgcolor: 'rgba(255, 167, 38, 0.08)', color: '#ffa726' }}>
-                    <Warning />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{ borderLeft: '3px solid #ef5350', borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
-              <CardContent>
-                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 500, textTransform: 'uppercase' }}>
-                  High Risk
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#ef5350' }}>
-                    {stats.highRisk}
-                  </Typography>
-                  <Avatar sx={{ bgcolor: 'rgba(239, 83, 80, 0.08)', color: '#ef5350' }}>
-                    <ErrorIcon />
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, color: item.color }}>
+                      {item.value}
+                    </Typography>
+                    <Avatar sx={{ bgcolor: `${item.color}15`, color: item.color, width: 40, height: 40 }}>
+                      {item.icon}
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
         </Grid>
       )}
 

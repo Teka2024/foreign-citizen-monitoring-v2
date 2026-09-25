@@ -33,6 +33,8 @@ import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import Profile from './pages/Profile';
 import UserManagement from './pages/UserManagement';
+import TransferCitizen from './pages/TransferCitizen';  // ✅ ADDED
+import Transfers from './pages/Transfers';              // ✅ ADDED
 
 const theme = createTheme({
   palette: {
@@ -115,7 +117,7 @@ function App() {
           <Helmet>
             <title>Foreign Citizens Monitoring System</title>
           </Helmet>
-          
+
           <ToastContainer
             position="top-right"
             autoClose={3000}
@@ -128,7 +130,7 @@ function App() {
             pauseOnHover
             theme="colored"
           />
-          
+
           <Routes>
             {/* PUBLIC ROUTES */}
             <Route path="/login" element={<Login />} />
@@ -139,31 +141,35 @@ function App() {
             <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
-              
+
               {/* Citizens */}
               <Route path="citizens" element={<CitizensList />} />
               <Route path="citizens/add" element={<AddCitizen />} />
               <Route path="citizens/:id" element={<CitizenDetails />} />
               <Route path="citizens/:id/edit" element={<EditCitizen />} />
-              
+
               {/* Accommodations */}
               <Route path="accommodations" element={<AccommodationsList />} />
               <Route path="accommodations/:id" element={<AccommodationDetails />} />
               <Route path="accommodations/add" element={<AddAccommodation />} />
-              
+
               {/* Check-In / Check-Out */}
               <Route path="check-in" element={<CheckIn />} />
               <Route path="check-out" element={<CheckOut />} />
               <Route path="checkin-history" element={<CheckInHistory />} />
-              
+
+              {/* Transfers */}
+              <Route path="transfer" element={<TransferCitizen />} />  {/* ✅ ADDED */}
+              <Route path="transfers" element={<Transfers />} />        {/* ✅ ADDED */}
+
               {/* Overstay */}
               <Route path="overstay" element={<OverstayMonitoring />} />
-              
+
               {/* Alerts & Reports */}
               <Route path="alerts" element={<Alerts />} />
               <Route path="reports" element={<Reports />} />
               <Route path="profile" element={<Profile />} />
-              
+
               {/* Users (Admin Only) */}
               <Route path="users" element={<UserManagement />} />
             </Route>

@@ -29,6 +29,7 @@ import {
   SwapHoriz,
   Person,
   CalendarToday,
+  Send,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -69,7 +70,14 @@ const TransferCitizen = () => {
 
   const fetchAccommodations = async () => {
     try {
-      const response = await api.get('/accommodations');
+      // ✅ Try to load ALL accommodations for the transfer picker.
+      // Falls back to /accommodations (officer-scoped) if transfer-options isn't available.
+      let response;
+      try {
+        response = await api.get('/accommodations/transfer-options');
+      } catch {
+        response = await api.get('/accommodations');
+      }
       setAccommodations(response.data.data || []);
     } catch (error) {
       console.error('Error fetching accommodations:', error);
@@ -101,7 +109,7 @@ const TransferCitizen = () => {
       }
 
       // Filter only citizens with active check-in
-      const activeResults = results.filter(c => 
+      const activeResults = results.filter(c =>
         c.currentAccommodation?.status === 'checked_in'
       );
 
@@ -144,6 +152,7 @@ const TransferCitizen = () => {
     setActiveStep(2);
   };
 
+  // ✅ CHANGED: Now creates a transfer REQUEST (pending until target officer accepts/rejects)
   const handleTransfer = async () => {
     if (!formData.expectedCheckOutDate) {
       toast.error('Please enter expected check-out date');
@@ -154,28 +163,27 @@ const TransferCitizen = () => {
     setError('');
 
     try {
-      const transferData = {
+      const requestData = {
         citizenId: selectedCitizen._id,
-        fromAccommodationId: activeCheckIn.accommodation._id,
         toAccommodationId: selectedAccommodation._id,
         expectedCheckOutDate: formData.expectedCheckOutDate,
         purpose: formData.purpose || activeCheckIn.purpose,
         roomNumber: formData.roomNumber || '',
-        transferReason: formData.transferReason || 'Transferred to new accommodation',
-        notes: formData.notes || `Transferred from ${activeCheckIn.accommodation.name} to ${selectedAccommodation.name}`,
+        reason: formData.transferReason || 'Transfer requested',
+        notes: formData.notes || `Transfer request from ${activeCheckIn.accommodation.name} to ${selectedAccommodation.name}`,
       };
 
-      console.log('🔄 Transfer data:', transferData);
+      console.log('🔄 Transfer request data:', requestData);
 
-      const response = await api.post('/accommodations/transfer', transferData);
-      console.log('✅ Transfer response:', response.data);
+      const response = await api.post('/accommodations/transfer-request', requestData);
+      console.log('✅ Transfer request response:', response.data);
 
-      toast.success('Citizen transferred successfully!');
-      navigate('/citizens');
+      toast.success(`Transfer request sent to ${selectedAccommodation.name}. Waiting for their response.`);
+      navigate('/transfers');
     } catch (error) {
-      console.error('❌ Transfer error:', error);
-      setError(error.response?.data?.message || 'Transfer failed');
-      toast.error(error.response?.data?.message || 'Transfer failed');
+      console.error('❌ Transfer request error:', error);
+      setError(error.response?.data?.message || 'Failed to send transfer request');
+      toast.error(error.response?.data?.message || 'Failed to send transfer request');
     } finally {
       setLoading(false);
     }
@@ -195,13 +203,52 @@ const TransferCitizen = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          Transfer Citizen
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-          Move a citizen from one accommodation to another
-        </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, position: 'relative', zIndex: 1 }}>
+          <Box sx={{
+            width: 48, height: 48, borderRadius: 3,
+            bgcolor: 'rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(10px)',
+            flexShrink: 0,
+          }}>
+            <SwapHoriz sx={{ fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+              Transfer Citizen
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+              Request a citizen to move from one accommodation to another
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
 
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -530,9 +577,9 @@ const TransferCitizen = () => {
               color="warning"
               onClick={handleTransfer}
               disabled={loading || !formData.expectedCheckOutDate}
-              startIcon={<SwapHoriz />}
+              startIcon={<Send />}
             >
-              {loading ? 'Processing...' : 'Confirm Transfer'}
+              {loading ? 'Sending...' : 'Send Transfer Request'}
             </Button>
           </Box>
         </Paper>

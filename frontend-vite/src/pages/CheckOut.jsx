@@ -43,6 +43,8 @@ import {
   Delete,
   PictureAsPdf,
   Description,
+  Logout,
+  Send,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { format } from 'date-fns';
@@ -63,15 +65,15 @@ const CheckOut = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  
+
   const [checkOutReason, setCheckOutReason] = useState('depart');
-  
+
   const [flightTicket, setFlightTicket] = useState(null);
   const [flightTicketPreview, setFlightTicketPreview] = useState(null);
   const [flightNumber, setFlightNumber] = useState('');
   const [flightDate, setFlightDate] = useState('');
   const [departureNotes, setDepartureNotes] = useState('');
-  
+
   const [accommodations, setAccommodations] = useState([]);
   const [selectedAccommodation, setSelectedAccommodation] = useState(null);
   const [transferFormData, setTransferFormData] = useState({
@@ -94,7 +96,15 @@ const CheckOut = () => {
 
   const fetchAccommodations = async () => {
     try {
-      const response = await api.get('/accommodations');
+      // ✅ Try to load ALL accommodations for the transfer picker
+      // (transfer-options endpoint returns all regardless of officer scope)
+      let response;
+      try {
+        response = await api.get('/accommodations/transfer-options');
+      } catch {
+        // fallback to /accommodations if transfer-options isn't available
+        response = await api.get('/accommodations');
+      }
       setAccommodations(response.data.data || []);
     } catch (error) {
       console.error('Error fetching accommodations:', error);
@@ -125,7 +135,7 @@ const CheckOut = () => {
         results = response.data;
       }
 
-      const activeResults = results.filter(c => 
+      const activeResults = results.filter(c =>
         c.currentAccommodation?.status === 'checked_in'
       );
 
@@ -152,9 +162,9 @@ const CheckOut = () => {
     try {
       const response = await api.get(`/accommodations/active/${citizen._id}`);
       console.log('📦 Active check-in response:', response.data);
-      
+
       const checkIn = response.data.data;
-      
+
       if (checkIn) {
         setActiveCheckIn(checkIn);
       } else {
@@ -196,6 +206,7 @@ const CheckOut = () => {
     setSelectedAccommodation(accommodation);
   };
 
+  // ✅ CHANGED: Now creates a transfer REQUEST (pending), not an immediate transfer
   const handleTransfer = async () => {
     if (!transferFormData.expectedCheckOutDate) {
       toast.error('Please enter expected check-out date');
@@ -210,23 +221,22 @@ const CheckOut = () => {
     setError('');
 
     try {
-      const transferData = {
+      const requestData = {
         citizenId: selectedCitizen._id,
-        fromAccommodationId: activeCheckIn.accommodation._id,
         toAccommodationId: selectedAccommodation._id,
         expectedCheckOutDate: transferFormData.expectedCheckOutDate,
-        purpose: transferFormData.purpose || activeCheckIn.purpose,
+        purpose: transferFormData.purpose || 'tourism',
         roomNumber: transferFormData.roomNumber || '',
-        transferReason: transferFormData.transferReason || 'Transferred to new accommodation',
-        notes: transferFormData.notes || `Transferred from ${activeCheckIn.accommodation.name} to ${selectedAccommodation.name}`,
+        reason: transferFormData.transferReason || 'Transfer requested',
+        notes: transferFormData.notes || `Transfer request from ${activeCheckIn.accommodation.name} to ${selectedAccommodation.name}`,
       };
 
-      await api.post('/accommodations/transfer', transferData);
-      toast.success('Citizen transferred successfully!');
-      navigate('/citizens');
+      await api.post('/accommodations/transfer-request', requestData);
+      toast.success(`Transfer request sent to ${selectedAccommodation.name}. Waiting for their response.`);
+      navigate('/transfers');
     } catch (error) {
-      setError(error.response?.data?.message || 'Transfer failed');
-      toast.error(error.response?.data?.message || 'Transfer failed');
+      setError(error.response?.data?.message || 'Failed to send transfer request');
+      toast.error(error.response?.data?.message || 'Failed to send transfer request');
     } finally {
       setLoading(false);
     }
@@ -258,11 +268,8 @@ const CheckOut = () => {
       formDataToSend.append('notes', departureNotes || '');
       formDataToSend.append('flightTicket', flightTicket);
 
-      // ✅ FIXED: Use the correct endpoint
       await api.post('/accommodations/check-out/depart', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       toast.success('Citizen checked out successfully!');
@@ -309,13 +316,52 @@ const CheckOut = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <Typography variant="h5" gutterBottom>
-          Check-Out / Transfer Citizen
-        </Typography>
-        <Typography variant="body2" sx={{ opacity: 0.8 }}>
-          Check out a citizen (Depart) or transfer them to another accommodation
-        </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, position: 'relative', zIndex: 1 }}>
+          <Box sx={{
+            width: 48, height: 48, borderRadius: 3,
+            bgcolor: 'rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(10px)',
+            flexShrink: 0,
+          }}>
+            <Logout sx={{ fontSize: 26 }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+              Check-Out / Transfer Citizen
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+              Check out a citizen (Depart) or request a transfer to another accommodation
+            </Typography>
+          </Box>
+        </Box>
       </Paper>
 
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -485,9 +531,9 @@ const CheckOut = () => {
               onChange={(e) => setCheckOutReason(e.target.value)}
               sx={{ mt: 2 }}
             >
-              <FormControlLabel 
-                value="depart" 
-                control={<Radio />} 
+              <FormControlLabel
+                value="depart"
+                control={<Radio />}
                 label={
                   <Box>
                     <Typography variant="body1" fontWeight="bold">Depart</Typography>
@@ -497,14 +543,14 @@ const CheckOut = () => {
                   </Box>
                 }
               />
-              <FormControlLabel 
-                value="transfer" 
-                control={<Radio />} 
+              <FormControlLabel
+                value="transfer"
+                control={<Radio />}
                 label={
                   <Box>
                     <Typography variant="body1" fontWeight="bold">Transfer</Typography>
                     <Typography variant="caption" color="textSecondary">
-                      Citizen is moving to another accommodation.
+                      Request the citizen to move to another accommodation. The receiving accommodation will accept or reject.
                     </Typography>
                   </Box>
                 }
@@ -512,7 +558,6 @@ const CheckOut = () => {
             </RadioGroup>
           </FormControl>
 
-          {/* Transfer: Show accommodation selection */}
           {checkOutReason === 'transfer' && (
             <Box sx={{ mt: 3 }}>
               <Typography variant="subtitle1" gutterBottom>
@@ -649,8 +694,11 @@ const CheckOut = () => {
               disabled={
                 checkOutReason === 'transfer' && !selectedAccommodation
               }
+              startIcon={checkOutReason === 'transfer' ? <Send /> : undefined}
             >
-              {checkOutReason === 'depart' ? 'Next →' : 'Confirm Transfer'}
+              {checkOutReason === 'depart'
+                ? 'Next →'
+                : (loading ? 'Sending...' : 'Send Transfer Request')}
             </Button>
           </Box>
         </Paper>
@@ -664,13 +712,12 @@ const CheckOut = () => {
           </Typography>
 
           <Alert severity="info" sx={{ mb: 3 }}>
-            <strong>Citizen:</strong> {selectedCitizen.fullName} | 
+            <strong>Citizen:</strong> {selectedCitizen.fullName} |
             <strong> Passport:</strong> {selectedCitizen.passportNumber} |
             <strong> Current Accommodation:</strong> {activeCheckIn?.accommodation?.name || 'N/A'}
           </Alert>
 
           <Grid container spacing={3}>
-            {/* Flight Ticket Upload */}
             <Grid item xs={12}>
               <Typography variant="subtitle1" gutterBottom>
                 <FlightTakeoff sx={{ mr: 1, verticalAlign: 'middle' }} />

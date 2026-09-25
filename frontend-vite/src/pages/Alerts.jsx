@@ -23,6 +23,7 @@ import {
   Grid,
   Card,
   CardContent,
+  Avatar,
 } from '@mui/material';
 import {
   Refresh,
@@ -59,11 +60,13 @@ const Alerts = () => {
     fetchStats();
   }, []);
 
-  const fetchAlerts = async () => {
+  // ✅ FIX: Accept optional statusOverride to avoid React state closure bug
+  const fetchAlerts = async (statusOverride = null) => {
     setLoading(true);
     setError('');
     try {
-      const url = filter === 'all' ? '/alerts' : `/alerts?status=${filter}`;
+      const statusToUse = statusOverride !== null ? statusOverride : filter;
+      const url = statusToUse === 'all' ? '/alerts' : `/alerts?status=${statusToUse}`;
       const response = await api.get(url);
       console.log('📊 Alerts response:', response.data);
       setAlerts(response.data.data || []);
@@ -104,7 +107,8 @@ const Alerts = () => {
     try {
       await api.put(`/alerts/${alertId}`, { status: newStatus });
       toast.success(`Alert ${newStatus}`);
-      fetchAlerts();
+      // ✅ Preserve current filter when refreshing after status change
+      fetchAlerts(filter);
       fetchStats();
     } catch (err) {
       toast.error('Failed to update alert status');
@@ -114,6 +118,13 @@ const Alerts = () => {
   const handleViewAlert = (alert) => {
     setSelectedAlert(alert);
     setOpenDialog(true);
+  };
+
+  // ✅ FIX: Handler for filter button clicks — updates state AND fetches with the new value
+  const handleFilterChange = (newFilter) => {
+    setFilter(newFilter);
+    fetchAlerts(newFilter);
+    fetchStats();
   };
 
   const getSeverityColor = (severity) => {
@@ -177,22 +188,76 @@ const Alerts = () => {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      {/* Header */}
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'primary.main', color: 'white' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box>
-            <Typography variant="h5" gutterBottom>
-              Alerts
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              Monitor and manage system alerts and notifications
-            </Typography>
+      {/* ==================== UNIFIED BLUE BANNER ==================== */}
+      <Paper sx={{
+        p: 3.5,
+        mb: 3,
+        borderRadius: 4,
+        background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: -60, right: -60,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: -80, right: 120,
+          width: 160, height: 160,
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.05)',
+        },
+      }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 2,
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)',
+              flexShrink: 0,
+            }}>
+              <NotificationsActive sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Alerts
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Monitor and manage system alerts and notifications
+              </Typography>
+            </Box>
           </Box>
           <Button
             variant="contained"
             startIcon={<Refresh />}
-            sx={{ bgcolor: 'white', color: 'primary.main', '&:hover': { bgcolor: 'rgba(255,255,255,0.9)' } }}
-            onClick={() => { fetchAlerts(); fetchStats(); }}
+            onClick={() => { fetchAlerts(filter); fetchStats(); }}
+            sx={{
+              borderRadius: 3,
+              textTransform: 'none',
+              fontWeight: 700,
+              px: 3, py: 1,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              color: 'white',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+            }}
           >
             Refresh
           </Button>
@@ -200,47 +265,38 @@ const Alerts = () => {
       </Paper>
 
       {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary">Total</Typography>
-              <Typography variant="h5">{stats.total}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ borderLeft: '4px solid #f44336' }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary">New</Typography>
-              <Typography variant="h4" color="error">{stats.new}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ borderLeft: '4px solid #ff9800' }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary">Acknowledged</Typography>
-              <Typography variant="h4" color="warning">{stats.acknowledged}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ borderLeft: '4px solid #2196f3' }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary">Investigating</Typography>
-              <Typography variant="h4" color="info">{stats.investigating}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Card sx={{ borderLeft: '4px solid #4caf50' }}>
-            <CardContent>
-              <Typography variant="caption" color="textSecondary">Resolved</Typography>
-              <Typography variant="h4" color="success">{stats.resolved}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
+        {[
+          { label: 'Total', value: stats.total, color: '#1976d2', icon: <NotificationsActive /> },
+          { label: 'New', value: stats.new, color: '#ef5350', icon: <NotificationsActive /> },
+          { label: 'Acknowledged', value: stats.acknowledged, color: '#ffa726', icon: <Visibility /> },
+          { label: 'Investigating', value: stats.investigating, color: '#29b6f6', icon: <Info /> },
+          { label: 'Resolved', value: stats.resolved, color: '#66bb6a', icon: <CheckCircle /> },
+        ].map((item, i) => (
+          <Grid item xs={12} sm={6} md={2.4} key={i}>
+            <Card sx={{
+              borderLeft: `3px solid ${item.color}`,
+              borderRadius: 2,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              transition: 'all 0.3s ease',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: `0 8px 24px ${item.color}20` },
+            }}>
+              <CardContent>
+                <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.5px' }}>
+                  {item.label}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 700, color: item.color }}>
+                    {item.value}
+                  </Typography>
+                  <Avatar sx={{ bgcolor: `${item.color}15`, color: item.color, width: 36, height: 36 }}>
+                    {item.icon}
+                  </Avatar>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
       </Grid>
 
       {error && (
@@ -254,42 +310,46 @@ const Alerts = () => {
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button
             variant={filter === 'all' ? 'contained' : 'outlined'}
-            onClick={() => { setFilter('all'); fetchAlerts(); }}
+            onClick={() => handleFilterChange('all')}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
           >
             All
           </Button>
           <Button
             variant={filter === 'new' ? 'contained' : 'outlined'}
             color="error"
-            onClick={() => { setFilter('new'); fetchAlerts(); }}
+            onClick={() => handleFilterChange('new')}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
           >
             New
           </Button>
           <Button
             variant={filter === 'acknowledged' ? 'contained' : 'outlined'}
             color="warning"
-            onClick={() => { setFilter('acknowledged'); fetchAlerts(); }}
+            onClick={() => handleFilterChange('acknowledged')}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
           >
             Acknowledged
           </Button>
           <Button
             variant={filter === 'investigating' ? 'contained' : 'outlined'}
             color="info"
-            onClick={() => { setFilter('investigating'); fetchAlerts(); }}
+            onClick={() => handleFilterChange('investigating')}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
           >
             Investigating
           </Button>
           <Button
             variant={filter === 'resolved' ? 'contained' : 'outlined'}
             color="success"
-            onClick={() => { setFilter('resolved'); fetchAlerts(); }}
+            onClick={() => handleFilterChange('resolved')}
+            sx={{ textTransform: 'none', borderRadius: 2 }}
           >
             Resolved
           </Button>
         </Box>
       </Paper>
 
-      {/* Alerts Table */}
       <TableContainer component={Paper}>
         <Table>
           <TableHead sx={{ bgcolor: 'grey.50' }}>
@@ -324,36 +384,20 @@ const Alerts = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={alert.type}
-                      color={getTypeColor(alert.type)}
-                      size="small"
-                    />
+                    <Chip label={alert.type} color={getTypeColor(alert.type)} size="small" />
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={alert.severity}
-                      color={getSeverityColor(alert.severity)}
-                      size="small"
-                    />
+                    <Chip label={alert.severity} color={getSeverityColor(alert.severity)} size="small" />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
                       {alert.message}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    {alert.citizenId?.fullName || 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    {formatDate(alert.createdAt)}
-                  </TableCell>
+                  <TableCell>{alert.citizenId?.fullName || 'N/A'}</TableCell>
+                  <TableCell>{formatDate(alert.createdAt)}</TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      onClick={() => handleViewAlert(alert)}
-                      title="View"
-                    >
+                    <IconButton size="small" onClick={() => handleViewAlert(alert)} title="View">
                       <Visibility />
                     </IconButton>
                     {alert.status !== 'resolved' && (
@@ -384,33 +428,18 @@ const Alerts = () => {
         </Table>
       </TableContainer>
 
-      {/* View Alert Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Chip
-              label={selectedAlert?.status}
-              color={getStatusColor(selectedAlert?.status)}
-              size="small"
-            />
-            <Chip
-              label={selectedAlert?.type}
-              color={getTypeColor(selectedAlert?.type)}
-              size="small"
-            />
-            <Chip
-              label={selectedAlert?.severity}
-              color={getSeverityColor(selectedAlert?.severity)}
-              size="small"
-            />
+            <Chip label={selectedAlert?.status} color={getStatusColor(selectedAlert?.status)} size="small" />
+            <Chip label={selectedAlert?.type} color={getTypeColor(selectedAlert?.type)} size="small" />
+            <Chip label={selectedAlert?.severity} color={getSeverityColor(selectedAlert?.severity)} size="small" />
           </Box>
         </DialogTitle>
         <DialogContent>
           {selectedAlert && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                {selectedAlert.message}
-              </Typography>
+              <Typography variant="h6" gutterBottom>{selectedAlert.message}</Typography>
               <Grid container spacing={2} sx={{ mt: 1 }}>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Citizen</Typography>

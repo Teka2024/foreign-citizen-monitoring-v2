@@ -8,20 +8,11 @@ import {
   Card,
   CardContent,
   LinearProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   Button,
   Alert,
-  Avatar,
-  IconButton,
-  Tooltip,
-  Divider,
-  Badge,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
   People,
@@ -30,23 +21,18 @@ import {
   Warning,
   Error as ErrorIcon,
   TrendingUp,
-  Info,
   NotificationsActive,
-  Business,
   Login,
   Logout,
-  PersonAdd,
   Refresh,
   ArrowForward,
   Assessment,
-  Schedule,
+  TrendingDown,
+  Today,
+  CalendarMonth,
   CalendarToday,
-  LocationOn,
-  Search,
 } from '@mui/icons-material';
 import {
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -61,10 +47,32 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+
+// ==================== MODERN COLOR PALETTE ====================
+const palette = {
+  primary: '#6366f1',
+  primaryDark: '#4f46e5',
+  primaryLight: '#818cf8',
+  success: '#10b981',
+  successLight: '#34d399',
+  warning: '#f59e0b',
+  warningLight: '#fbbf24',
+  danger: '#ef4444',
+  dangerLight: '#f87171',
+  info: '#06b6d4',
+  infoLight: '#22d3ee',
+  purple: '#8b5cf6',
+  purpleLight: '#a78bfa',
+  pink: '#ec4899',
+  teal: '#14b8a6',
+  slate: '#64748b',
+  dark: '#0f172a',
+  gray: '#94a3b8',
+  lightGray: '#f1f5f9',
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -81,8 +89,6 @@ const Dashboard = () => {
     pendingAlerts: 0,
     totalAccommodations: 0,
   });
-  const [recentCitizens, setRecentCitizens] = useState([]);
-  const [recentCheckIns, setRecentCheckIns] = useState([]);
   const [trends, setTrends] = useState([]);
   const [distribution, setDistribution] = useState([]);
   const [overstayData, setOverstayData] = useState({
@@ -91,8 +97,12 @@ const Dashboard = () => {
     expiringSoon: []
   });
 
+  // Activity Overview state
+  const [activityPeriod, setActivityPeriod] = useState('monthly');
+  const [activityData, setActivityData] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+
   const isOfficer = user?.role === 'officer' || user?.role === 'admin';
-  const isAdmin = user?.role === 'admin';
 
   const defaultTrends = [
     { month: 'Jan', entries: 0, checkins: 0 },
@@ -105,10 +115,28 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchActivityData(activityPeriod);
     if (isOfficer) {
       fetchOverstayData();
     }
   }, []);
+
+  useEffect(() => {
+    fetchActivityData(activityPeriod);
+  }, [activityPeriod]);
+
+  const fetchActivityData = async (period) => {
+    setActivityLoading(true);
+    try {
+      const res = await api.get(`/dashboard/activity-trends?period=${period}`);
+      setActivityData(res.data.data || []);
+    } catch (err) {
+      console.error('Error fetching activity data:', err);
+      setActivityData([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -116,7 +144,7 @@ const Dashboard = () => {
     try {
       const statsRes = await api.get('/dashboard/stats');
       const statsData = statsRes.data.data || statsRes.data;
-      
+
       setStats({
         totalCitizens: statsData.totalCitizens || 0,
         activeCitizens: statsData.activeCitizens || 0,
@@ -129,21 +157,9 @@ const Dashboard = () => {
       });
 
       try {
-        const citizensRes = await api.get('/citizens', { params: { limit: 5 } });
-        const citizens = citizensRes.data.data || citizensRes.data.citizens || [];
-        setRecentCitizens(citizens.slice(0, 5));
-      } catch (err) {
-        setRecentCitizens([]);
-      }
-
-      try {
         const trendsRes = await api.get('/dashboard/trends');
         const rawData = trendsRes.data.data || trendsRes.data || [];
-        if (rawData.length > 0) {
-          setTrends(rawData);
-        } else {
-          setTrends(defaultTrends);
-        }
+        setTrends(rawData.length > 0 ? rawData : defaultTrends);
       } catch {
         setTrends(defaultTrends);
       }
@@ -151,26 +167,9 @@ const Dashboard = () => {
       try {
         const distRes = await api.get('/dashboard/distribution');
         const distData = distRes.data.data || distRes.data || [];
-        if (distData.length > 0) {
-          setDistribution(distData);
-        } else {
-          setDistribution([
-            { name: 'Active', value: 1, color: '#22c55e' }
-          ]);
-        }
+        setDistribution(distData.length > 0 ? distData : [{ name: 'Active', value: 1, color: palette.success }]);
       } catch {
-        setDistribution([
-          { name: 'Active', value: 1, color: '#22c55e' }
-        ]);
-      }
-
-      if (isOfficer) {
-        try {
-          const checkInsRes = await api.get('/dashboard/recent-checkins', { params: { limit: 5 } });
-          setRecentCheckIns(checkInsRes.data.data || []);
-        } catch {
-          setRecentCheckIns([]);
-        }
+        setDistribution([{ name: 'Active', value: 1, color: palette.success }]);
       }
 
     } catch (err) {
@@ -186,7 +185,7 @@ const Dashboard = () => {
   const fetchOverstayData = async () => {
     try {
       const response = await api.get('/dashboard/overstay-monitoring');
-      setOverstayData(response.data.data || { 
+      setOverstayData(response.data.data || {
         summary: { overstayedCount: 0, expiringSoonCount: 0 },
         overstayed: [],
         expiringSoon: []
@@ -198,406 +197,308 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3 }}>
-        <LinearProgress />
-        <Typography variant="body2" color="textSecondary" sx={{ mt: 2, textAlign: 'center' }}>
-          Loading dashboard data...
-        </Typography>
+      <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <Box sx={{ width: '100%', maxWidth: 400 }}>
+          <LinearProgress sx={{
+            height: 6, borderRadius: 3,
+            bgcolor: palette.lightGray,
+            '& .MuiLinearProgress-bar': {
+              borderRadius: 3,
+              background: `linear-gradient(90deg, ${palette.primary}, ${palette.purple})`,
+            }
+          }} />
+          <Typography variant="body2" sx={{ mt: 3, textAlign: 'center', color: palette.slate, fontWeight: 500 }}>
+            Loading dashboard data...
+          </Typography>
+        </Box>
       </Box>
     );
   }
 
-  // ==================== STAT CARDS CONFIGURATION ====================
-  // Subtle, softer colors for icons
   const statCards = [
-    { 
-      title: 'Total Citizens', 
-      value: stats.totalCitizens, 
-      color: '#4a90d9', 
-      icon: <People sx={{ fontSize: 22, color: '#4a90d9' }} />,
-      bg: 'rgba(74, 144, 217, 0.08)',
-      trend: '+12%',
-      trendColor: '#22c55e',
-    },
-    { 
-      title: 'Active', 
-      value: stats.activeCitizens, 
-      color: '#34a853', 
-      icon: <CheckCircle sx={{ fontSize: 22, color: '#34a853' }} />,
-      bg: 'rgba(52, 168, 83, 0.08)',
-      trend: '+5%',
-      trendColor: '#22c55e',
-    },
-    { 
-      title: 'Checked In', 
-      value: stats.checkedIn, 
-      color: '#f9a825', 
-      icon: <Login sx={{ fontSize: 22, color: '#f9a825' }} />,
-      bg: 'rgba(249, 168, 37, 0.08)',
-      trend: '+8%',
-      trendColor: '#22c55e',
-    },
-    { 
-      title: 'Checked Out', 
-      value: stats.checkedOut || 0, 
-      color: '#78909c', 
-      icon: <Logout sx={{ fontSize: 22, color: '#78909c' }} />,
-      bg: 'rgba(120, 144, 156, 0.08)',
-      trend: '+3%',
-      trendColor: '#22c55e',
-    },
-    { 
-      title: 'Overstayed', 
-      value: stats.overstayed, 
-      color: '#e53935', 
-      icon: <ErrorIcon sx={{ fontSize: 22, color: '#e53935' }} />,
-      bg: 'rgba(229, 57, 53, 0.08)',
-      trend: '-2%',
-      trendColor: '#ef4444',
-    },
-    { 
-      title: 'High Risk', 
-      value: stats.highRisk || 0, 
-      color: '#e53935', 
-      icon: <Warning sx={{ fontSize: 22, color: '#e53935' }} />,
-      bg: 'rgba(229, 57, 53, 0.08)',
-      trend: '+3%',
-      trendColor: '#ef4444',
-    },
-    { 
-      title: 'Pending Alerts', 
-      value: stats.pendingAlerts || 0, 
-      color: '#7c3aed', 
-      icon: <NotificationsActive sx={{ fontSize: 22, color: '#7c3aed' }} />,
-      bg: 'rgba(124, 58, 237, 0.08)',
+    { title: 'Total Citizens', value: stats.totalCitizens, icon: <People sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryLight} 100%)`,
+      iconColor: palette.primary, trend: '+12%', trendUp: true },
+    { title: 'Active', value: stats.activeCitizens, icon: <CheckCircle sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.success} 0%, ${palette.successLight} 100%)`,
+      iconColor: palette.success, trend: '+5%', trendUp: true },
+    { title: 'Checked In', value: stats.checkedIn, icon: <Login sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.warning} 0%, ${palette.warningLight} 100%)`,
+      iconColor: palette.warning, trend: '+8%', trendUp: true },
+    { title: 'Checked Out', value: stats.checkedOut || 0, icon: <Logout sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.slate} 0%, ${palette.gray} 100%)`,
+      iconColor: palette.slate, trend: '+3%', trendUp: true },
+    { title: 'Overstayed', value: stats.overstayed, icon: <ErrorIcon sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.danger} 0%, ${palette.dangerLight} 100%)`,
+      iconColor: palette.danger, trend: '-2%', trendUp: false },
+    { title: 'High Risk', value: stats.highRisk || 0, icon: <Warning sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.danger} 0%, ${palette.pink} 100%)`,
+      iconColor: palette.danger, trend: '+3%', trendUp: false },
+    { title: 'New Alerts', value: stats.pendingAlerts || 0, icon: <NotificationsActive sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.purple} 0%, ${palette.purpleLight} 100%)`,
+      iconColor: palette.purple,
       trend: stats.pendingAlerts > 0 ? '⚠️ Urgent' : '✓ All clear',
-      trendColor: stats.pendingAlerts > 0 ? '#ef4444' : '#22c55e',
-    },
-    { 
-      title: 'Accommodations', 
-      value: stats.totalAccommodations || 0, 
-      color: '#00897b', 
-      icon: <Hotel sx={{ fontSize: 22, color: '#00897b' }} />,
-      bg: 'rgba(0, 137, 123, 0.08)',
-      trend: '+4%',
-      trendColor: '#22c55e',
-    },
+      trendUp: stats.pendingAlerts === 0 },
+    { title: 'Accommodations', value: stats.totalAccommodations || 0, icon: <Hotel sx={{ fontSize: 24 }} />,
+      gradient: `linear-gradient(135deg, ${palette.teal} 0%, ${palette.infoLight} 100%)`,
+      iconColor: palette.teal, trend: '+4%', trendUp: true },
   ];
 
-  // ==================== COLORS FOR CHARTS ====================
-  const COLORS = ['#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f472b6'];
+  const COLORS = [palette.success, palette.warning, palette.danger, palette.purple, palette.info, palette.pink];
+
+  const activityTotals = activityData.reduce(
+    (acc, row) => ({
+      registrations: acc.registrations + (row.registrations || 0),
+      checkins: acc.checkins + (row.checkins || 0),
+      checkouts: acc.checkouts + (row.checkouts || 0),
+    }),
+    { registrations: 0, checkins: 0, checkouts: 0 }
+  );
 
   return (
-    <Box sx={{ p: 3, maxWidth: '100%' }}>
-      {/* ==================== HEADER - WITH COLORED BACKGROUND ==================== */}
-      <Paper sx={{ 
-        p: 3, 
-        mb: 3, 
-        borderRadius: 3,
+    <Box sx={{ p: 3, maxWidth: '100%', bgcolor: '#f8fafc', minHeight: '100vh' }}>
+      {/* ==================== HEADER ==================== */}
+      <Paper sx={{
+        p: 3.5, mb: 3.5, borderRadius: 4,
         background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 50%, #0d47a1 100%)',
         color: 'white',
-        boxShadow: '0 4px 20px rgba(25, 118, 210, 0.25)',
+        boxShadow: '0 8px 32px rgba(25, 118, 210, 0.30)',
+        position: 'relative', overflow: 'hidden',
+        '&::before': {
+          content: '""', position: 'absolute',
+          top: -60, right: -60, width: 200, height: 200,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.08)',
+        },
+        '&::after': {
+          content: '""', position: 'absolute',
+          bottom: -80, right: 120, width: 160, height: 160,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.05)',
+        },
       }}>
-        <Box sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          flexWrap: 'wrap',
-          gap: 2,
-        }}>
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: 'white', mb: 0.5 }}>
-              Dashboard
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)' }}>
-              Welcome back, {user?.fullName || 'User'}! Here's what's happening today.
-            </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, position: 'relative', zIndex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+            <Box sx={{
+              width: 48, height: 48, borderRadius: 3,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(10px)', flexShrink: 0,
+            }}>
+              <Assessment sx={{ fontSize: 26 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'white', letterSpacing: '-0.5px' }}>
+                Dashboard
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.85)', mt: 0.5 }}>
+                Welcome back, {user?.fullName || 'User'}! Here's what's happening today.
+              </Typography>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              startIcon={<Refresh />}
-              onClick={fetchDashboardData}
-              sx={{ 
-                borderRadius: 2, 
-                textTransform: 'none',
-                bgcolor: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.3)',
-                },
-              }}
-            >
-              Refresh
-            </Button>
-          </Box>
+          <Button
+            variant="contained"
+            startIcon={<Refresh />}
+            onClick={fetchDashboardData}
+            sx={{
+              borderRadius: 3, textTransform: 'none', fontWeight: 700, px: 3, py: 1,
+              bgcolor: 'rgba(255,255,255,0.15)', color: 'white',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' },
+            }}
+          >
+            Refresh
+          </Button>
         </Box>
       </Paper>
 
       {error && (
-        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError('')}>
+        <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
         </Alert>
       )}
 
       {/* ==================== OVERSTAY MONITORING BANNER ==================== */}
       {(overstayData.overstayed.length > 0 || overstayData.expiringSoon.length > 0) && (
-        <Paper sx={{ 
-          p: 2, 
-          mb: 3, 
-          borderRadius: 2,
-          border: '1px solid #fef3c7',
-          bgcolor: '#fffbeb',
+        <Paper sx={{
+          p: 2.5, mb: 3.5, borderRadius: 3,
+          border: `1px solid ${palette.warning}30`,
+          bgcolor: `${palette.warning}08`,
         }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Warning sx={{ color: '#f59e0b' }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#92400e' }}>
-                Overstay Monitoring
-              </Typography>
+              <Box sx={{
+                width: 40, height: 40, borderRadius: 2,
+                bgcolor: `${palette.warning}15`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Warning sx={{ color: palette.warning, fontSize: 22 }} />
+              </Box>
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#92400e' }}>Overstay Monitoring</Typography>
+                <Typography variant="caption" sx={{ color: '#b45309' }}>Requires attention</Typography>
+              </Box>
             </Box>
-            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ 
-                  width: 10, 
-                  height: 10, 
-                  borderRadius: '50%', 
-                  bgcolor: '#ef4444' 
-                }} />
-                <Typography variant="body2" sx={{ color: '#92400e' }}>
+            <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderRadius: 2, bgcolor: `${palette.danger}10` }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: palette.danger }} />
+                <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
                   <strong>{overstayData.summary.overstayedCount || 0}</strong> Overstayed
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ 
-                  width: 10, 
-                  height: 10, 
-                  borderRadius: '50%', 
-                  bgcolor: '#f59e0b' 
-                }} />
-                <Typography variant="body2" sx={{ color: '#92400e' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderRadius: 2, bgcolor: `${palette.warning}10` }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: palette.warning }} />
+                <Typography variant="body2" sx={{ color: '#92400e', fontWeight: 500 }}>
                   <strong>{overstayData.summary.expiringSoonCount || 0}</strong> Expiring Soon (≤7 days)
                 </Typography>
               </Box>
+              <Button size="small" onClick={() => navigate('/overstay')} endIcon={<ArrowForward sx={{ fontSize: 16 }} />}
+                sx={{ color: '#92400e', fontWeight: 600, textTransform: 'none' }}>
+                View All
+              </Button>
             </Box>
-            <Button size="small" onClick={() => navigate('/overstay')} sx={{ color: '#92400e' }}>
-              View All →
-            </Button>
           </Box>
         </Paper>
       )}
 
       {/* ==================== STATS CARDS ==================== */}
-      <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
+      <Grid container spacing={2.5} sx={{ mb: 4 }}>
         {statCards.map((item, index) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
-            <Card sx={{ 
-              borderRadius: 3,
-              overflow: 'hidden',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-              border: '1px solid #f3f4f6',
-              transition: 'all 0.3s ease',
+            <Card sx={{
+              borderRadius: 3, overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              border: '1px solid #e2e8f0',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'relative',
               '&:hover': {
-                transform: 'translateY(-4px)',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
+                transform: 'translateY(-6px)',
+                boxShadow: `0 16px 40px ${item.iconColor}15`,
+                borderColor: `${item.iconColor}30`,
               },
             }}>
-              <CardContent sx={{ p: 2.5 }}>
+              <CardContent sx={{ p: 2.5, position: 'relative' }}>
                 <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                  <Box>
-                    <Typography variant="caption" sx={{ 
-                      color: '#6b7280', 
-                      fontWeight: 500, 
-                      fontSize: '0.65rem', 
-                      letterSpacing: '0.5px',
-                      textTransform: 'uppercase',
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" sx={{
+                      color: palette.slate, fontWeight: 600, fontSize: '0.7rem',
+                      letterSpacing: '0.8px', textTransform: 'uppercase',
                     }}>
                       {item.title}
                     </Typography>
-                    <Typography variant="h4" sx={{ 
-                      fontWeight: 700, 
-                      color: '#111827',
-                      mt: 0.5,
-                      fontSize: '1.75rem',
+                    <Typography variant="h4" sx={{
+                      fontWeight: 800, color: palette.dark,
+                      mt: 0.8, fontSize: '2rem', letterSpacing: '-1px',
                     }}>
                       {item.value}
                     </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                       <Chip
                         label={item.trend}
                         size="small"
-                        sx={{ 
-                          height: 20, 
-                          fontSize: '0.6rem',
-                          fontWeight: 600,
-                          bgcolor: item.trendColor === '#22c55e' ? '#dcfce7' : '#fee2e2',
-                          color: item.trendColor,
+                        icon={item.trendUp ? <TrendingUp sx={{ fontSize: 14 }} /> : <TrendingDown sx={{ fontSize: 14 }} />}
+                        sx={{
+                          height: 24, fontSize: '0.65rem', fontWeight: 700,
+                          bgcolor: item.trendUp ? `${palette.success}15` : `${palette.danger}15`,
+                          color: item.trendUp ? palette.success : palette.danger,
+                          '& .MuiChip-icon': { color: item.trendUp ? palette.success : palette.danger },
+                          borderRadius: 2,
                         }}
                       />
-                      <Typography variant="caption" color="#6b7280">
+                      <Typography variant="caption" sx={{ color: palette.gray, fontWeight: 500 }}>
                         vs last month
                       </Typography>
                     </Box>
                   </Box>
-                  <Box sx={{ 
-                    width: 42, 
-                    height: 42, 
-                    borderRadius: 2,
-                    bgcolor: item.bg,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                  <Box sx={{
+                    width: 48, height: 48, borderRadius: 3,
+                    background: item.gradient,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
+                    boxShadow: `0 4px 12px ${item.iconColor}30`,
+                    color: 'white',
                   }}>
                     {item.icon}
                   </Box>
                 </Box>
+                <Box sx={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0,
+                  height: 3, background: item.gradient, opacity: 0.6,
+                }} />
               </CardContent>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      {/* ==================== CHARTS SECTION ==================== */}
-      <Grid container spacing={3} sx={{ mb: 3.5 }}>
-        {/* Activity Trends Chart */}
+      {/* ==================== CHARTS ROW ==================== */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={8}>
-          <Paper sx={{ 
-            p: 3, 
-            borderRadius: 3,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            border: '1px solid #f3f4f6',
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', height: '100%' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#111827' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: palette.dark, letterSpacing: '-0.3px' }}>
                   Activity Trends
                 </Typography>
-                <Typography variant="caption" color="#6b7280">
+                <Typography variant="caption" sx={{ color: palette.gray, fontWeight: 500 }}>
                   Monthly overview of registrations and check-ins
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ width: 12, height: 3, bgcolor: '#1976d2', borderRadius: 2 }} />
-                  <Typography variant="caption" color="#6b7280">Registrations</Typography>
+              <Box sx={{ display: 'flex', gap: 2.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                  <Box sx={{ width: 12, height: 4, borderRadius: 2, background: `linear-gradient(90deg, ${palette.primary}, ${palette.primaryLight})` }} />
+                  <Typography variant="caption" sx={{ color: palette.slate, fontWeight: 500 }}>Registrations</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ width: 12, height: 3, bgcolor: '#22c55e', borderRadius: 2 }} />
-                  <Typography variant="caption" color="#6b7280">Check-Ins</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                  <Box sx={{ width: 12, height: 4, borderRadius: 2, background: `linear-gradient(90deg, ${palette.success}, ${palette.successLight})` }} />
+                  <Typography variant="caption" sx={{ color: palette.slate, fontWeight: 500 }}>Check-Ins</Typography>
                 </Box>
               </Box>
             </Box>
-            <Box sx={{ height: 280, width: '100%' }}>
+            <Box sx={{ height: 300, width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trends} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorEntries" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1976d2" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#1976d2" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={palette.primary} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={palette.primary} stopOpacity={0}/>
                     </linearGradient>
                     <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                      <stop offset="5%" stopColor={palette.success} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={palette.success} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis 
-                    allowDecimals={false} 
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <RechartsTooltip 
-                    contentStyle={{ 
-                      borderRadius: 8, 
-                      border: '1px solid #f3f4f6',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="entries" 
-                    name="Registrations"
-                    stroke="#1976d2" 
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#colorEntries)"
-                    dot={{ r: 3, fill: '#1976d2' }}
-                    activeDot={{ r: 6 }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="checkins" 
-                    name="Check-Ins"
-                    stroke="#22c55e" 
-                    strokeWidth={2.5}
-                    fillOpacity={1}
-                    fill="url(#colorCheckins)"
-                    dot={{ r: 3, fill: '#22c55e' }}
-                    activeDot={{ r: 6 }}
-                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: palette.gray, fontWeight: 500 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: palette.gray, fontWeight: 500 }} axisLine={false} tickLine={false} />
+                  <RechartsTooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+                  <Area type="monotone" dataKey="entries" name="Registrations" stroke={palette.primary} strokeWidth={3} fillOpacity={1} fill="url(#colorEntries)" dot={{ r: 4, fill: palette.primary, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 7 }} />
+                  <Area type="monotone" dataKey="checkins" name="Check-Ins" stroke={palette.success} strokeWidth={3} fillOpacity={1} fill="url(#colorCheckins)" dot={{ r: 4, fill: palette.success, strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 7 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </Box>
           </Paper>
         </Grid>
 
-        {/* Status Distribution */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ 
-            p: 3, 
-            borderRadius: 3,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            border: '1px solid #f3f4f6',
-            height: '100%',
-          }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: '#111827', mb: 2 }}>
+          <Paper sx={{ p: 3, borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', height: '100%' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: palette.dark, mb: 0.5, letterSpacing: '-0.3px' }}>
               Status Distribution
             </Typography>
-            <Box sx={{ height: 260, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ color: palette.gray, fontWeight: 500 }}>
+              Current citizen status breakdown
+            </Typography>
+            <Box sx={{ height: 280, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 1 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={distribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
+                  <Pie data={distribution} cx="50%" cy="50%" innerRadius={60} outerRadius={95} paddingAngle={4} dataKey="value"
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={{ stroke: '#e5e7eb', strokeWidth: 1 }}
-                    fontSize={10}
-                    fontWeight={500}
-                  >
+                    labelLine={{ stroke: '#e2e8f0' }} fontSize={11} fontWeight={600}>
                     {distribution.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.color || COLORS[index % COLORS.length]} 
-                      />
+                      <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} stroke="#fff" strokeWidth={2} />
                     ))}
                   </Pie>
-                  <RechartsTooltip 
-                    contentStyle={{ 
-                      borderRadius: 8, 
-                      border: '1px solid #f3f4f6',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                    }}
-                  />
-                  <Legend 
-                    verticalAlign="bottom" 
-                    height={36}
-                    iconType="circle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: '11px', color: '#6b7280' }}
-                  />
+                  <RechartsTooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={10} wrapperStyle={{ fontSize: '12px', color: palette.slate }} />
                 </PieChart>
               </ResponsiveContainer>
             </Box>
@@ -605,189 +506,175 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* ==================== RECENT ACTIVITY ==================== */}
-      <Grid container spacing={3}>
-        {/* Recent Registrations */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ 
-            p: 3, 
-            borderRadius: 3,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            border: '1px solid #f3f4f6',
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#111827' }}>
-                  Recent Registrations
-                </Typography>
-                <Typography variant="caption" color="#6b7280">
-                  Latest citizens added to the system
-                </Typography>
+      {/* ==================== ACTIVITY OVERVIEW (POLISHED) ==================== */}
+      <Paper sx={{
+        p: 3,
+        borderRadius: 4,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        border: '1px solid #e2e8f0',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: 4,
+          background: `linear-gradient(90deg, ${palette.primary}, ${palette.success}, ${palette.slate})`,
+          opacity: 0.7,
+        },
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5, flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: palette.dark, letterSpacing: '-0.3px' }}>
+              Activity Overview
+            </Typography>
+            <Typography variant="caption" sx={{ color: palette.gray, fontWeight: 500 }}>
+              Track registrations, check-ins, and check-outs over time
+            </Typography>
+          </Box>
+
+          <ToggleButtonGroup
+            value={activityPeriod}
+            exclusive
+            onChange={(e, v) => { if (v) setActivityPeriod(v); }}
+            size="small"
+            sx={{
+              bgcolor: '#f8fafc',
+              borderRadius: 2,
+              p: 0.5,
+              border: '1px solid #e2e8f0',
+              '& .MuiToggleButton-root': {
+                border: 'none',
+                borderRadius: 1.5,
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                px: 2, py: 0.8,
+                color: palette.slate,
+                gap: 0.8,
+                '&.Mui-selected': {
+                  bgcolor: 'white',
+                  color: palette.primary,
+                  boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)',
+                  '&:hover': { bgcolor: 'white' },
+                },
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.5)' },
+              },
+            }}
+          >
+            <ToggleButton value="daily">
+              <Today sx={{ fontSize: 16 }} />
+              Daily
+            </ToggleButton>
+            <ToggleButton value="monthly">
+              <CalendarMonth sx={{ fontSize: 16 }} />
+              Monthly
+            </ToggleButton>
+            <ToggleButton value="yearly">
+              <CalendarToday sx={{ fontSize: 16 }} />
+              Yearly
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
+        <Grid container spacing={2} sx={{ mb: 2 }}>
+          {[
+            { label: 'Registrations', value: activityTotals.registrations, color: palette.primary },
+            { label: 'Check-Ins', value: activityTotals.checkins, color: palette.success },
+            { label: 'Check-Outs', value: activityTotals.checkouts, color: palette.slate },
+          ].map((item, i) => (
+            <Grid item xs={12} sm={4} key={i}>
+              <Box sx={{
+                borderRadius: 3,
+                border: `1px solid ${item.color}20`,
+                bgcolor: `${item.color}05`,
+                p: 1.75,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  borderColor: `${item.color}40`,
+                  bgcolor: `${item.color}10`,
+                },
+              }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: item.color }} />
+                    <Typography variant="caption" sx={{ color: palette.slate, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.65rem' }}>
+                      {item.label}
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" sx={{ fontWeight: 800, color: item.color, fontSize: '1.5rem', lineHeight: 1 }}>
+                    {item.value}
+                  </Typography>
+                </Box>
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: 2,
+                  bgcolor: `${item.color}12`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <TrendingUp sx={{ fontSize: 18, color: item.color }} />
+                </Box>
               </Box>
-              <Button 
-                size="small" 
-                endIcon={<ArrowForward />}
-                onClick={() => navigate('/citizens')}
-                sx={{ textTransform: 'none', fontWeight: 500 }}
-              >
-                View All
-              </Button>
-            </Box>
-            <Divider sx={{ mb: 2 }} />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f9fafb' }}>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Name</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Passport</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Nationality</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentCitizens.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 4, color: '#6b7280' }}>
-                        No recent registrations
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    recentCitizens.map((citizen) => (
-                      <TableRow 
-                        key={citizen._id} 
-                        hover 
-                        onClick={() => navigate(`/citizens/${citizen._id}`)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Avatar sx={{ 
-                              width: 32, 
-                              height: 32, 
-                              bgcolor: '#1976d2', 
-                              fontSize: '0.7rem',
-                              fontWeight: 600,
-                            }}>
-                              {citizen.fullName?.charAt(0) || 'U'}
-                            </Avatar>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {citizen.fullName}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>{citizen.passportNumber}</TableCell>
-                        <TableCell>{citizen.nationality}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={citizen.status || 'Active'} 
-                            color={citizen.status === 'active' ? 'success' : 'warning'} 
-                            size="small" 
-                            sx={{ height: 22, fontSize: '0.6rem' }} 
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
+            </Grid>
+          ))}
         </Grid>
 
-        {/* Recent Check-Ins */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ 
-            p: 3, 
-            borderRadius: 3,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-            border: '1px solid #f3f4f6',
-          }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Box>
-                <Typography variant="h6" sx={{ fontWeight: 600, color: '#111827' }}>
-                  Recent Check-Ins
-                </Typography>
-                <Typography variant="caption" color="#6b7280">
-                  Latest accommodation check-ins
-                </Typography>
-              </Box>
-              <Button 
-                size="small" 
-                endIcon={<ArrowForward />}
-                onClick={() => navigate('/check-in')}
-                sx={{ textTransform: 'none', fontWeight: 500 }}
-              >
-                View All
-              </Button>
+        <Box sx={{ height: 300, width: '100%', position: 'relative' }}>
+          {activityLoading && (
+            <Box sx={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              bgcolor: 'rgba(255,255,255,0.7)', zIndex: 10, borderRadius: 2,
+            }}>
+              <LinearProgress sx={{ width: 200, borderRadius: 2 }} />
             </Box>
-            <Divider sx={{ mb: 2 }} />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ bgcolor: '#f9fafb' }}>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Citizen</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Accommodation</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Date</TableCell>
-                    <TableCell sx={{ fontWeight: 600, fontSize: '0.7rem', color: '#6b7280' }}>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentCheckIns.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} align="center" sx={{ py: 4, color: '#6b7280' }}>
-                        No recent check-ins
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    recentCheckIns.map((checkIn) => (
-                      <TableRow 
-                        key={checkIn._id} 
-                        hover
-                        onClick={() => navigate(`/citizens/${checkIn.citizen?._id}`)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Avatar sx={{ 
-                              width: 32, 
-                              height: 32, 
-                              bgcolor: '#22c55e', 
-                              fontSize: '0.7rem',
-                              fontWeight: 600,
-                            }}>
-                              {checkIn.citizen?.fullName?.charAt(0) || '?'}
-                            </Avatar>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {checkIn.citizen?.fullName || 'N/A'}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Hotel sx={{ fontSize: 14, color: '#6b7280' }} />
-                            {checkIn.accommodation?.name || 'N/A'}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          {checkIn.checkInDate ? format(new Date(checkIn.checkInDate), 'MMM dd, yyyy') : 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={checkIn.status || 'Active'} 
-                            color={checkIn.status === 'active' ? 'success' : 'default'} 
-                            size="small" 
-                            sx={{ height: 22, fontSize: '0.6rem' }} 
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Grid>
-      </Grid>
+          )}
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={activityData}
+              margin={{ top: 10, right: 20, left: -10, bottom: 5 }}
+              barCategoryGap="25%"
+              barGap={6}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 12, fill: palette.gray, fontWeight: 500 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 12, fill: palette.gray, fontWeight: 500 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <RechartsTooltip
+                cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
+                contentStyle={{
+                  borderRadius: 12,
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                iconType="circle"
+                iconSize={10}
+                wrapperStyle={{ fontSize: '12px', color: palette.slate, fontWeight: 500 }}
+              />
+              <Bar dataKey="registrations" name="Registrations" fill={palette.primary} radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="checkins" name="Check-Ins" fill={palette.success} radius={[6, 6, 0, 0]} maxBarSize={32} />
+              <Bar dataKey="checkouts" name="Check-Outs" fill={palette.slate} radius={[6, 6, 0, 0]} maxBarSize={32} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Box>
+      </Paper>
     </Box>
   );
 };
