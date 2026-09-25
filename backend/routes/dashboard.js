@@ -16,7 +16,6 @@ router.get('/stats', authenticate, async (req, res) => {
     let accommodationFilter = {};
     let alertFilter = {};
 
-    // ✅ Officer: Only see stats for their accommodation
     if (req.user.role === 'officer' && req.user.accommodationId) {
       const accommodationId = req.user.accommodationId._id || req.user.accommodationId;
       citizenFilter = { 'currentAccommodation.accommodationId': accommodationId };
@@ -25,7 +24,6 @@ router.get('/stats', authenticate, async (req, res) => {
       alertFilter = { 'metadata.fromAccommodation': accommodationId };
     }
 
-    // --- Parallel counts for everything except overstayed ---
     const [
       totalCitizens,
       activeCitizens,
@@ -37,27 +35,16 @@ router.get('/stats', authenticate, async (req, res) => {
     ] = await Promise.all([
       ForeignCitizen.countDocuments(citizenFilter),
       ForeignCitizen.countDocuments({ ...citizenFilter, status: 'active' }),
-
-      // ✅ Active check-ins
       AccommodationHistory.countDocuments({ ...checkinFilter, status: 'active' }),
-
-      // ✅ FIXED: check-out count with correct enum value 'checked_out'
       AccommodationHistory.countDocuments({ ...checkinFilter, status: 'checked_out' }),
-
-      // ✅ High/critical risk citizens
       ForeignCitizen.countDocuments({
         ...citizenFilter,
         riskLevel: { $in: ['high', 'critical'] },
       }),
-
-      // ✅ FIXED: 'new' is the correct "pending" status for Alert schema
       Alert.countDocuments({ ...alertFilter, status: 'new' }),
-
-      // ✅ FIXED: Now counting accommodations
       Accommodation.countDocuments(accommodationFilter),
     ]);
 
-    // --- Compute overstayed dynamically (same logic as /overstay-monitoring) ---
     const citizens = await ForeignCitizen.find({
       ...citizenFilter,
       status: { $in: ['active', 'overstayed'] },
@@ -165,14 +152,7 @@ router.get('/distribution', authenticate, async (req, res) => {
       filter = { 'currentAccommodation.accommodationId': accommodationId };
     }
 
-    const [
-      active,
-      expired,
-      pending,
-      suspended,
-      overstayed,
-      exited
-    ] = await Promise.all([
+    const [active, expired, pending, suspended, overstayed, exited] = await Promise.all([
       ForeignCitizen.countDocuments({ ...filter, status: 'active' }),
       ForeignCitizen.countDocuments({ ...filter, status: 'expired' }),
       ForeignCitizen.countDocuments({ ...filter, status: 'pending' }),
@@ -292,14 +272,13 @@ router.get('/overstay-monitoring', authenticate, async (req, res) => {
   }
 });
 
-// ==================== RECENT CHECK-INS ==================== ← ✅ NEW
+// ==================== RECENT CHECK-INS ====================
 router.get('/recent-checkins', authenticate, async (req, res) => {
   try {
     console.log('📊 Fetching recent check-ins...');
 
     const limit = parseInt(req.query.limit) || 5;
 
-    // ✅ Officer filter — only show check-ins for their accommodation
     let checkinFilter = {};
     if (req.user.role === 'officer' && req.user.accommodationId) {
       const accommodationId = req.user.accommodationId._id || req.user.accommodationId;
@@ -323,6 +302,145 @@ router.get('/recent-checkins', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Recent check-ins error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// ==================== ✅ NEW: ACTIVITY TRENDS (DAILY / MONTHLY / YEARLY) ====================
+router.get('/activity-trends', authenticate, async (req, res) => {
+  try {
+    const { period = 'monthly' } = req.query;
+    console.log(`📊 Fetching activity trends — period: ${period}`);
+
+    // ✅ Officer scope
+    let citizenFilter = {};
+    let checkinFilter = {};
+    if (req.user.role === 'officer' && req.user.accommodationId) {
+      const accommodationId = req.user.accommodationId._id || req.user.accommodationId;
+      citizenFilter = { 'currentAccommodation.accommodationId': accommodationId };
+      checkinFilter = { accommodation: accommodationId };
+    }
+
+    const now = new Date();
+    const result = [];
+
+    // -------------------- DAILY (last 7 days) --------------------
+    if (period === 'daily') {
+      for (let i = 6; i >= 0; i--) {
+        const day = new Date(now);
+        day.setDate(now.getDate() - i);
+        const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
+        const end = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
+
+        const [registrations, checkins, checkouts] = await Promise.all([
+          ForeignCitizen.countDocuments({
+            ...citizenFilter,
+            createdAt: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            checkInDate: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            status: 'checked_out',
+            actualCheckOutDate: { $gte: start, $lte: end },
+          }),
+        ]);
+
+        result.push({
+          label: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          registrations: registrations || 0,
+          checkins: checkins || 0,
+          checkouts: checkouts || 0,
+        });
+      }
+    }
+
+    // -------------------- MONTHLY (last 6 months) --------------------
+    else if (period === 'monthly') {
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const start = new Date(d.getFullYear(), d.getMonth(), 1);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+
+        const [registrations, checkins, checkouts] = await Promise.all([
+          ForeignCitizen.countDocuments({
+            ...citizenFilter,
+            createdAt: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            checkInDate: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            status: 'checked_out',
+            actualCheckOutDate: { $gte: start, $lte: end },
+          }),
+        ]);
+
+        result.push({
+          label: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+          registrations: registrations || 0,
+          checkins: checkins || 0,
+          checkouts: checkouts || 0,
+        });
+      }
+    }
+
+    // -------------------- YEARLY (last 3 years) --------------------
+    else if (period === 'yearly') {
+      for (let i = 2; i >= 0; i--) {
+        const year = now.getFullYear() - i;
+        const start = new Date(year, 0, 1);
+        const end = new Date(year, 11, 31, 23, 59, 59);
+
+        const [registrations, checkins, checkouts] = await Promise.all([
+          ForeignCitizen.countDocuments({
+            ...citizenFilter,
+            createdAt: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            checkInDate: { $gte: start, $lte: end },
+          }),
+          AccommodationHistory.countDocuments({
+            ...checkinFilter,
+            status: 'checked_out',
+            actualCheckOutDate: { $gte: start, $lte: end },
+          }),
+        ]);
+
+        result.push({
+          label: String(year),
+          registrations: registrations || 0,
+          checkins: checkins || 0,
+          checkouts: checkouts || 0,
+        });
+      }
+    }
+
+    // -------------------- FALLBACK --------------------
+    else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid period. Use daily, monthly, or yearly.',
+      });
+    }
+
+    console.log(`✅ Activity trends (${period}):`, result);
+
+    res.status(200).json({
+      success: true,
+      period,
+      data: result,
+    });
+  } catch (error) {
+    console.error('❌ Activity trends error:', error);
     res.status(500).json({
       success: false,
       message: error.message,
